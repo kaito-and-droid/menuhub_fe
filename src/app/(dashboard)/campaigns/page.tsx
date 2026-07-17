@@ -280,7 +280,8 @@ export default function CampaignsPage() {
                   <input
                     required
                     type="number"
-                    min={1}
+                    min={0}
+                    step="any"
                     max={form.discount_type === "percent" ? 100 : undefined}
                     value={form.discount_value}
                     onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
@@ -292,6 +293,7 @@ export default function CampaignsPage() {
                   <input
                     type="number"
                     min={0}
+                    step="any"
                     value={form.min_order_amount}
                     onChange={(e) => setForm({ ...form, min_order_amount: e.target.value })}
                     className={inputClass}

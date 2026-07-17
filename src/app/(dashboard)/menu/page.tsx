@@ -328,7 +328,8 @@ export default function MenuPage() {
                 <input
                   required
                   type="number"
-                  min={1}
+                  min={0}
+                  step="any"
                   value={form.price}
                   onChange={(e) => setForm({ ...form, price: e.target.value })}
                   className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
@@ -339,6 +340,7 @@ export default function MenuPage() {
                 <input
                   type="number"
                   min={0}
+                  step="any"
                   value={form.cost}
                   onChange={(e) => setForm({ ...form, cost: e.target.value })}
                   className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"

@@ -235,6 +235,7 @@ export default function InventoryPage() {
               required
               type="number"
               min={0}
+              step="any"
               value={purchase.cost}
               onChange={(e) => setPurchase({ ...purchase, cost: e.target.value })}
               className={`${inputClass} mb-3 w-full`}
