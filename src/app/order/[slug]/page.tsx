@@ -2,16 +2,19 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { publicApi } from "@/lib/api";
+import { ApiError, publicApi } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { PublicCampaign, PublicMenu, PublicMenuItem } from "@/lib/types";
 import GallerySection from "@/components/GallerySection";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useOrderI18n } from "@/lib/useOrderI18n";
+import { formatOrderDate, formatOrderTime } from "@/lib/order-i18n";
+import { useDialogA11y } from "@/lib/useDialogA11y";
+import { usePrefersReducedMotion } from "@/lib/usePrefersReducedMotion";
 import { MOCK_MENU, makeMockOrder } from "@/lib/mock-menu";
 
 const PAYMENT_LABELS: Record<string, { en: string; vi: string }> = {
@@ -49,17 +52,19 @@ function ItemImageCarousel({ images, name, autoAdvanceMs = 3500 }: ItemImageCaro
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const pausedRef = useRef(false);
+  const reducedMotion = usePrefersReducedMotion();
   const multi = images.length > 1;
 
   const scrollToIndex = (i: number) => {
     const el = scrollerRef.current;
     if (!el) return;
-    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+    el.scrollTo({ left: i * el.clientWidth, behavior: reducedMotion ? "auto" : "smooth" });
   };
 
   // Auto-advance on a timer; pauses while the user is touching/hovering.
+  // Disabled entirely when the user prefers reduced motion.
   useEffect(() => {
-    if (!multi) return;
+    if (!multi || reducedMotion) return;
     const id = window.setInterval(() => {
       if (pausedRef.current) return;
       const el = scrollerRef.current;
@@ -68,7 +73,7 @@ function ItemImageCarousel({ images, name, autoAdvanceMs = 3500 }: ItemImageCaro
       el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
     }, autoAdvanceMs);
     return () => window.clearInterval(id);
-  }, [multi, images.length, autoAdvanceMs]);
+  }, [multi, images.length, autoAdvanceMs, reducedMotion]);
 
   const onScroll = () => {
     const el = scrollerRef.current;
@@ -91,7 +96,9 @@ function ItemImageCarousel({ images, name, autoAdvanceMs = 3500 }: ItemImageCaro
       <div
         ref={scrollerRef}
         onScroll={onScroll}
-        className="flex aspect-[4/3] w-full snap-x snap-mandatory overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={`flex aspect-[4/3] w-full snap-x snap-mandatory overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+          reducedMotion ? "" : "scroll-smooth"
+        }`}
       >
         {images.map((src, i) => (
           <img
@@ -123,6 +130,12 @@ function ItemImageCarousel({ images, name, autoAdvanceMs = 3500 }: ItemImageCaro
   );
 }
 
+/** Ordered image gallery for an item: prefer image_urls, fall back to image_url. */
+function itemImages(item: PublicMenuItem): string[] {
+  if (item.image_urls && item.image_urls.length > 0) return item.image_urls;
+  return item.image_url ? [item.image_url] : [];
+}
+
 interface ItemCardProps {
   item: PublicMenuItem;
   selectedVariant: Record<string, string>;
@@ -131,6 +144,7 @@ interface ItemCardProps {
   adjust: (id: string, delta: number, variant?: string | null) => void;
   money: (v: number) => string;
   t: (key: string, vars?: Record<string, string | number>) => string;
+  onOpen: (item: PublicMenuItem) => void;
 }
 
 function ItemCard({
@@ -141,6 +155,7 @@ function ItemCard({
   adjust,
   money,
   t,
+  onOpen,
 }: ItemCardProps) {
   const hasVariants = item.variants && item.variants.length > 0;
   const selVariant = hasVariants ? (selectedVariant[item.id] ?? item.variants[0].name) : null;
@@ -154,13 +169,7 @@ function ItemCard({
   const curKey = cartKey(item.id, selVariant);
   const curQty = cart[curKey] ?? 0;
 
-  // Build the ordered image gallery: prefer image_urls, fall back to single image_url.
-  const images =
-    item.image_urls && item.image_urls.length > 0
-      ? item.image_urls
-      : item.image_url
-        ? [item.image_url]
-        : [];
+  const images = itemImages(item);
 
   return (
     <article
@@ -168,17 +177,24 @@ function ItemCard({
         totalQty > 0 ? "ring-2 ring-amber-600/70" : ""
       }`}
     >
-      {/* 1. Image (auto-scrolling carousel when multiple) */}
-      {images.length > 0 ? (
-        <ItemImageCarousel images={images} name={item.name} />
-      ) : (
-        <div
-          aria-hidden
-          className="flex aspect-[4/3] w-full items-center justify-center bg-gradient-to-br from-amber-100 to-amber-200 text-5xl font-bold text-amber-700 [font-family:var(--font-display)]"
-        >
-          {item.name.charAt(0)}
-        </div>
-      )}
+      {/* 1. Image — tappable to open the item detail sheet */}
+      <button
+        type="button"
+        onClick={() => onOpen(item)}
+        aria-label={t("view_details", { label: item.name })}
+        className="relative block w-full cursor-pointer text-left transition-opacity duration-150 active:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500"
+      >
+        {images.length > 0 ? (
+          <ItemImageCarousel images={images} name={item.name} />
+        ) : (
+          <div
+            aria-hidden
+            className="flex aspect-[4/3] w-full items-center justify-center bg-gradient-to-br from-amber-100 to-amber-200 text-5xl font-bold text-amber-700 [font-family:var(--font-display)]"
+          >
+            {item.name.charAt(0)}
+          </div>
+        )}
+      </button>
       {totalQty > 0 && (
         <span className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-amber-700 text-xs font-bold text-white shadow">
           {totalQty}
@@ -186,11 +202,19 @@ function ItemCard({
       )}
 
       <div className="flex flex-1 flex-col gap-2 p-3.5">
-        {/* 2. Description */}
+        {/* 2. Description — title opens the detail sheet too */}
         <div>
-          <h3 className="text-base font-bold leading-snug text-stone-900">{item.name}</h3>
+          <button
+            type="button"
+            onClick={() => onOpen(item)}
+            className="cursor-pointer text-left focus:outline-none focus-visible:underline"
+          >
+            <h3 className="text-base font-bold leading-snug text-stone-900">{item.name}</h3>
+          </button>
           {item.description && (
-            <p className="mt-1 text-sm leading-relaxed text-stone-500">{item.description}</p>
+            <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-stone-500">
+              {item.description}
+            </p>
           )}
         </div>
 
@@ -217,7 +241,7 @@ function ItemCard({
               <button
                 onClick={() => adjust(item.id, +1, selVariant)}
                 aria-label={t("add_one", { label: item.name })}
-                className="flex shrink-0 cursor-pointer items-center justify-center gap-1 rounded-xl bg-amber-700 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                className="flex shrink-0 cursor-pointer items-center justify-center gap-1 rounded-xl bg-amber-700 px-4 py-2 text-sm font-bold text-white transition duration-150 hover:bg-amber-800 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
               >
                 <IconPlus /> {t("add")}
               </button>
@@ -249,6 +273,169 @@ function ItemCard({
         </div>
       </div>
     </article>
+  );
+}
+
+/* ---------- item detail sheet (full image, description, variant + qty picker) ---------- */
+interface ItemDetailSheetProps {
+  item: PublicMenuItem;
+  cart: Record<string, number>;
+  setCartQty: (itemId: string, variant: string | null, qty: number) => void;
+  money: (v: number) => string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+  onClose: () => void;
+}
+
+function ItemDetailSheet({
+  item,
+  cart,
+  setCartQty,
+  money,
+  t,
+  onClose,
+}: ItemDetailSheetProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(dialogRef, true, onClose);
+
+  const hasVariants = item.variants && item.variants.length > 0;
+  const [variant, setVariant] = useState<string | null>(
+    hasVariants ? item.variants[0].name : null,
+  );
+  const existingQty = cart[cartKey(item.id, variant)] ?? 0;
+  // Local quantity: start from what's already in the cart, or 1 for a fresh add.
+  const [qty, setQty] = useState<number>(existingQty > 0 ? existingQty : 1);
+
+  // Switching variant reflects that variant's current cart quantity (or 1).
+  function chooseVariant(name: string) {
+    setVariant(name);
+    const inCart = cart[cartKey(item.id, name)] ?? 0;
+    setQty(inCart > 0 ? inCart : 1);
+  }
+
+  const unitPrice = hasVariants
+    ? item.variants.find((v) => v.name === variant)?.price ?? item.price
+    : item.price;
+  const images = itemImages(item);
+
+  function confirm() {
+    setCartQty(item.id, variant, qty);
+    onClose();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-30 flex items-end justify-center bg-stone-900/50 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="item-detail-title"
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white sm:rounded-3xl"
+      >
+        {/* Close button floats over the image */}
+        <div className="relative shrink-0">
+          {images.length > 0 ? (
+            <ItemImageCarousel images={images} name={item.name} autoAdvanceMs={5000} />
+          ) : (
+            <div
+              aria-hidden
+              className="flex aspect-[4/3] w-full items-center justify-center bg-gradient-to-br from-amber-100 to-amber-200 text-6xl font-bold text-amber-700 [font-family:var(--font-display)]"
+            >
+              {item.name.charAt(0)}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t("close")}
+            className="absolute right-3 top-3 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-white/90 text-stone-700 shadow transition-colors duration-200 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+          >
+            <IconClose />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5 [scrollbar-width:thin]">
+          <h2
+            id="item-detail-title"
+            className="text-2xl font-bold text-stone-900 [font-family:var(--font-display)]"
+          >
+            {item.name}
+          </h2>
+          <p className="mt-1 text-xl font-bold text-amber-800">{money(unitPrice)}</p>
+          {item.description && (
+            <p className="mt-3 text-sm leading-relaxed text-stone-600">{item.description}</p>
+          )}
+
+          {hasVariants && (
+            <div className="mt-5">
+              <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-stone-500">
+                {t("choose_option")}
+              </h3>
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t("choose_option")}>
+                {item.variants.map((v) => (
+                  <button
+                    key={v.name}
+                    type="button"
+                    role="radio"
+                    aria-checked={variant === v.name}
+                    onClick={() => chooseVariant(v.name)}
+                    className={`cursor-pointer rounded-xl border-2 px-4 py-2.5 text-sm font-bold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+                      variant === v.name
+                        ? "border-amber-600 bg-amber-50 text-amber-900"
+                        : "border-stone-200 text-stone-600 hover:border-amber-300"
+                    }`}
+                  >
+                    {v.name} · {money(v.price)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sticky footer: quantity + add */}
+        <div className="shrink-0 border-t border-stone-100 bg-white px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 rounded-xl bg-stone-100 p-1">
+              <button
+                type="button"
+                onClick={() => setQty((q) => Math.max(1, q - 1))}
+                disabled={qty <= 1}
+                aria-label={t("decrease_qty")}
+                className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-stone-700 transition-colors duration-200 hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              >
+                <IconMinus />
+              </button>
+              <span className="w-8 text-center text-base font-bold text-stone-900" aria-live="polite">
+                {qty}
+              </span>
+              <button
+                type="button"
+                onClick={() => setQty((q) => q + 1)}
+                aria-label={t("increase_qty")}
+                className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-stone-700 transition-colors duration-200 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+              >
+                <IconPlus />
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={confirm}
+              className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl bg-amber-700 py-3.5 text-base font-bold text-white shadow-[0_8px_30px_rgba(120,80,40,0.35)] transition duration-150 hover:bg-amber-800 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+            >
+              <IconBag />
+              {existingQty > 0
+                ? t("update_cart", { amount: money(unitPrice * qty) })
+                : t("add_to_cart", { amount: money(unitPrice * qty) })}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -360,6 +547,11 @@ const IconChevronLeft = () => (
     <path d="m15 18-6-6 6-6" />
   </svg>
 );
+const IconClose = () => (
+  <svg className={icon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M18 6 6 18M6 6l12 12" />
+  </svg>
+);
 const IconMessenger = () => (
   <svg className={icon} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
     <path d="M12 2C6.36 2 2 6.13 2 11.7c0 2.91 1.19 5.44 3.14 7.17.16.15.26.35.27.57l.05 1.78c.02.57.6.94 1.12.71l1.98-.87c.17-.08.36-.09.53-.04.91.25 1.88.38 2.91.38 5.64 0 10-4.13 10-9.7S17.64 2 12 2Zm6 7.46-2.94 4.66c-.47.74-1.47.93-2.17.4l-2.34-1.75a.6.6 0 0 0-.72 0l-3.16 2.4c-.42.32-.97-.18-.69-.63l2.94-4.66c.47-.74 1.47-.93 2.17-.4l2.34 1.75c.21.16.51.16.72 0l3.16-2.4c.42-.32.97.18.69.63Z" />
@@ -418,6 +610,7 @@ export default function PublicOrderPage() {
   const { slug } = useParams<{ slug: string }>();
   const [menu, setMenu] = useState<PublicMenu | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [selectedVariant, setSelectedVariant] = useState<Record<string, string>>({});
   const [checkout, setCheckout] = useState(false);
@@ -425,13 +618,43 @@ export default function PublicOrderPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<CustomerForm>(EMPTY_FORM);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isMember, setIsMember] = useState(false);
   const [returningMember, setReturningMember] = useState<MemberRecord | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const [detailItem, setDetailItem] = useState<PublicMenuItem | null>(null);
   const { locale, t, setLocale } = useOrderI18n();
   const money = (v: number) => formatMoney(v, menu?.currency);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  const categoryChipRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  // While a chip click drives a smooth scroll, ignore observer updates so the
+  // highlight doesn't flicker through intermediate sections.
+  const suppressSpyRef = useRef(false);
+  const checkoutDialogRef = useRef<HTMLDivElement>(null);
+
+  // Accessible checkout dialog: scroll-lock, focus trap, Escape, focus return.
+  useDialogA11y(checkoutDialogRef, checkout, () => setCheckout(false));
+
+  const loadMenu = useCallback(async () => {
+    setLoadError(false);
+    setNotFound(false);
+    try {
+      const data = await publicApi<PublicMenu>(`/api/public/shops/${slug}/menu`);
+      setMenu(data);
+      setActiveCategory(data.categories[0]?.name ?? null);
+      setLayout(data.menu_layout ?? "grid");
+      setForm((f) => ({ ...f, payment_method: data.payment_methods[0] ?? "cash" }));
+    } catch (err) {
+      // A 404 means the shop truly doesn't exist; anything else is likely
+      // transient (network/server) and worth offering a retry.
+      if (err instanceof ApiError && err.status === 404) {
+        setNotFound(true);
+      } else {
+        setLoadError(true);
+      }
+    }
+  }, [slug]);
 
   useEffect(() => {
     const savedCart = loadCart(slug);
@@ -445,21 +668,14 @@ export default function PublicOrderPage() {
       setForm((f) => ({ ...f, payment_method: MOCK_MENU.payment_methods[0] ?? "cash" }));
       return;
     }
-    publicApi<PublicMenu>(`/api/public/shops/${slug}/menu`)
-      .then((data) => {
-        setMenu(data);
-        setActiveCategory(data.categories[0]?.name ?? null);
-        setLayout(data.menu_layout ?? "grid");
-        setForm((f) => ({ ...f, payment_method: data.payment_methods[0] ?? "cash" }));
-      })
-      .catch(() => setNotFound(true));
+    void loadMenu();
     const member = loadMember(slug);
     if (member) {
       setReturningMember(member);
       setIsMember(true);
       setForm((f) => ({ ...f, ...member }));
     }
-  }, [slug]);
+  }, [slug, loadMenu]);
 
   useEffect(() => {
     const clean = Object.fromEntries(Object.entries(cart).filter(([, qty]) => qty > 0));
@@ -469,6 +685,40 @@ export default function PublicOrderPage() {
       localStorage.setItem(cartStorageKey(slug), JSON.stringify(clean));
     }
   }, [cart, slug]);
+
+  // Scroll-spy: highlight the category chip for the section currently in view.
+  useEffect(() => {
+    const categories = menu?.categories ?? [];
+    if (categories.length <= 1) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (suppressSpyRef.current) return;
+        // Among sections intersecting the top band, pick the highest one.
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        const name = visible[0]?.target.getAttribute("data-category");
+        if (name) {
+          setActiveCategory(name);
+          categoryChipRefs.current[name]?.scrollIntoView({
+            behavior: "smooth",
+            inline: "center",
+            block: "nearest",
+          });
+        }
+      },
+      // Top band just under the sticky chip bar; -60% bottom so a section
+      // becomes "active" once its heading nears the top of the viewport.
+      { rootMargin: "-88px 0px -60% 0px", threshold: 0 },
+    );
+
+    categories.forEach((c) => {
+      const el = sectionRefs.current[c.name];
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [menu]);
 
   const allItems = useMemo(() => {
     const map: Record<string, PublicMenuItem> = {};
@@ -510,9 +760,20 @@ export default function PublicOrderPage() {
     setCart((c) => ({ ...c, [key]: Math.max(0, (c[key] ?? 0) + delta) }));
   }
 
+  function setCartQty(id: string, variant: string | null, qty: number) {
+    const key = cartKey(id, variant);
+    setCart((c) => ({ ...c, [key]: Math.max(0, qty) }));
+  }
+
   function scrollToCategory(name: string) {
     setActiveCategory(name);
+    // Suppress scroll-spy while the smooth scroll runs so it doesn't fight the
+    // user's explicit choice, then re-enable shortly after it settles.
+    suppressSpyRef.current = true;
     sectionRefs.current[name]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      suppressSpyRef.current = false;
+    }, 700);
   }
 
   function forgetMember() {
@@ -522,8 +783,73 @@ export default function PublicOrderPage() {
     setForm(EMPTY_FORM);
   }
 
+  /** Update one form field and clear any inline error attached to it. */
+  function updateField<K extends keyof CustomerForm>(key: K, value: CustomerForm[K]) {
+    setForm((f) => ({ ...f, [key]: value }));
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
+  /** Field-level validation. Returns a map of fieldId -> message (empty if valid). */
+  function validate(): Record<string, string> {
+    const errs: Record<string, string> = {};
+    if (!form.name.trim()) errs.name = t("err_name_required");
+
+    const phone = form.phone.trim();
+    if (!phone) {
+      errs.phone = t("err_phone_required");
+    } else if (!/^\+?[\d\s-]{6,}$/.test(phone) || phone.replace(/\D/g, "").length < 6) {
+      errs.phone = t("err_phone_invalid");
+    }
+
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      errs.email = t("err_email_invalid");
+    }
+
+    if (form.delivery_type === "delivery") {
+      if (!form.delivery_address.trim()) errs.delivery_address = t("err_address_required");
+      const postal = form.postal_code.trim();
+      const postalOk =
+        menu?.currency === "SGD" ? /^\d{6}$/.test(postal) : /^\d{5,6}$/.test(postal);
+      if (!postal) {
+        errs.postal_code = t("err_postal_required");
+      } else if (!postalOk) {
+        errs.postal_code = t("err_postal_invalid");
+      }
+    }
+    return errs;
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
+
+    const errs = validate();
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      // Focus (and scroll to) the first invalid field.
+      const idByField: Record<string, string> = {
+        name: "co-name",
+        phone: "co-phone",
+        email: "co-email",
+        delivery_address: "co-address",
+        postal_code: "co-postal",
+      };
+      const firstKey = ["name", "phone", "email", "delivery_address", "postal_code"].find(
+        (k) => errs[k],
+      );
+      if (firstKey) {
+        const el = document.getElementById(idByField[firstKey]);
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        el?.focus({ preventScroll: true });
+      }
+      return;
+    }
+    setFieldErrors({});
+
     setBusy(true);
     setError(null);
     try {
@@ -589,6 +915,25 @@ export default function PublicOrderPage() {
       </main>
     );
   }
+  if (loadError) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#faf6f0] p-4">
+        <div className="w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-[0_8px_40px_rgba(120,80,40,0.12)]">
+          <h1 className="text-xl font-bold text-stone-900 [font-family:var(--font-display)]">
+            {t("load_error_title")}
+          </h1>
+          <p className="mt-2 text-sm text-stone-500">{t("load_error_help")}</p>
+          <button
+            type="button"
+            onClick={() => void loadMenu()}
+            className="mt-5 w-full cursor-pointer rounded-xl bg-amber-700 py-3 text-sm font-bold text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+          >
+            {t("try_again")}
+          </button>
+        </div>
+      </main>
+    );
+  }
   if (!menu) {
     return (
       <main className="min-h-screen bg-[#faf6f0] p-4">
@@ -631,10 +976,7 @@ export default function PublicOrderPage() {
             <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-3 py-1 text-sm text-stone-600">
               <IconClock />
               {t("ready_around", {
-                time: new Date(placed.estimated_ready_at).toLocaleTimeString("vi-VN", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
+                time: formatOrderTime(placed.estimated_ready_at, locale),
               })}
             </p>
           )}
@@ -684,6 +1026,9 @@ export default function PublicOrderPage() {
 
   const inputClass =
     "w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-base text-stone-900 placeholder:text-stone-500 transition-colors duration-200 focus:border-amber-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20";
+  const inputErrorClass =
+    "w-full rounded-xl border border-red-400 bg-red-50/50 px-4 py-3 text-base text-stone-900 placeholder:text-stone-500 transition-colors duration-200 focus:border-red-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/20";
+  const fieldErrorClass = "mt-1 text-xs font-medium text-red-600";
   const labelClass = "mb-1.5 block text-sm font-semibold text-stone-700";
 
   /* ---------- main menu screen ---------- */
@@ -799,7 +1144,7 @@ export default function PublicOrderPage() {
                   )}
                   {campaign.ends_at && (
                     <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-white/70">
-                       {t("until", { date: new Date(campaign.ends_at).toLocaleDateString("vi-VN") })}
+                       {t("until", { date: formatOrderDate(campaign.ends_at, locale) })}
                     </p>
                   )}
                 </div>
@@ -825,7 +1170,11 @@ export default function PublicOrderPage() {
               {menu.categories.map((category) => (
                 <button
                   key={category.name}
+                  ref={(el) => {
+                    categoryChipRefs.current[category.name] = el;
+                  }}
                   onClick={() => scrollToCategory(category.name)}
+                  aria-current={activeCategory === category.name ? "true" : undefined}
                   className={`shrink-0 cursor-pointer rounded-xl px-4 py-2 text-sm font-semibold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
                     activeCategory === category.name
                       ? "bg-amber-700 text-white"
@@ -875,40 +1224,70 @@ export default function PublicOrderPage() {
       </div>
 
       <div className="mx-auto max-w-lg px-4 pt-3">
-        {menu.categories.map((category) => (
-          <section
-            key={category.name}
-            ref={(el) => {
-              sectionRefs.current[category.name] = el;
-            }}
-            className="mb-8 scroll-mt-24"
-          >
-            <h2 className="mb-3 text-xl font-bold text-stone-900 [font-family:var(--font-display)]">
-              {category.name}
-            </h2>
-            <div
-              className={
-                layout === "list"
-                  ? "flex flex-col gap-4"
-                  : "grid grid-cols-1 gap-4 sm:grid-cols-2"
-              }
-            >
-              {category.items.map((item) => (
-                <ItemCard
-                  key={item.id}
-                  item={item}
-                  selectedVariant={selectedVariant}
-                  setSelectedVariant={setSelectedVariant}
-                  cart={cart}
-                  adjust={adjust}
-                  money={money}
-                  t={t}
-                />
-              ))}
+        {menu.categories.every((c) => c.items.length === 0) ? (
+          <div className="mt-6 rounded-2xl bg-white p-8 text-center shadow-[0_2px_12px_rgba(120,80,40,0.07)]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
+              <IconBag />
             </div>
-          </section>
-        ))}
+            <p className="mt-3 font-bold text-stone-900">{t("menu_empty_title")}</p>
+            <p className="mt-1 text-sm text-stone-500">{t("menu_empty_help")}</p>
+          </div>
+        ) : (
+          menu.categories.map((category) => (
+            <section
+              key={category.name}
+              data-category={category.name}
+              ref={(el) => {
+                sectionRefs.current[category.name] = el;
+              }}
+              className="mb-8 scroll-mt-24"
+            >
+              <h2 className="mb-3 text-xl font-bold text-stone-900 [font-family:var(--font-display)]">
+                {category.name}
+              </h2>
+              {category.items.length === 0 ? (
+                <p className="rounded-2xl bg-white px-4 py-6 text-center text-sm text-stone-500 shadow-[0_2px_12px_rgba(120,80,40,0.07)]">
+                  {t("category_empty")}
+                </p>
+              ) : (
+                <div
+                  className={
+                    layout === "list"
+                      ? "flex flex-col gap-4"
+                      : "grid grid-cols-1 gap-4 sm:grid-cols-2"
+                  }
+                >
+                  {category.items.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      selectedVariant={selectedVariant}
+                      setSelectedVariant={setSelectedVariant}
+                      cart={cart}
+                      adjust={adjust}
+                      money={money}
+                      t={t}
+                      onOpen={setDetailItem}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          ))
+        )}
       </div>
+
+      {/* Item detail sheet */}
+      {detailItem && (
+        <ItemDetailSheet
+          item={detailItem}
+          cart={cart}
+          setCartQty={setCartQty}
+          money={money}
+          t={t}
+          onClose={() => setDetailItem(null)}
+        />
+      )}
 
       {/* Sticky cart bar */}
       {cartCount > 0 && !checkout && (
@@ -945,9 +1324,19 @@ export default function PublicOrderPage() {
 
       {/* Checkout sheet */}
       {checkout && (
-        <div className="fixed inset-0 z-20 flex items-end justify-center bg-stone-900/50 backdrop-blur-sm sm:items-center sm:p-4">
+        <div
+          className="fixed inset-0 z-20 flex items-end justify-center bg-stone-900/50 backdrop-blur-sm sm:items-center sm:p-4"
+          onClick={() => setCheckout(false)}
+        >
           {/* Sheet container — fixed height, flex column so children can stick */}
-          <div className="flex max-h-[92vh] w-full max-w-lg flex-col rounded-t-3xl bg-white sm:rounded-3xl">
+          <div
+            ref={checkoutDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="checkout-title"
+            onClick={(e) => e.stopPropagation()}
+            className="flex max-h-[92vh] w-full max-w-lg flex-col rounded-t-3xl bg-white sm:rounded-3xl"
+          >
 
             {/* ── STICKY HEADER: title ── */}
             <div className="shrink-0 rounded-t-3xl bg-white px-6 pt-6 pb-3 sm:rounded-t-3xl">
@@ -960,7 +1349,7 @@ export default function PublicOrderPage() {
                 >
                   <IconChevronLeft />
                 </button>
-                 <h2 className="text-xl font-bold text-stone-900 [font-family:var(--font-display)]">
+                 <h2 id="checkout-title" className="text-xl font-bold text-stone-900 [font-family:var(--font-display)]">
                   {t("your_order")}
                 </h2>
               </div>
@@ -1039,6 +1428,7 @@ export default function PublicOrderPage() {
             {/* ── SCROLLABLE FORM BODY ── */}
             <form
               onSubmit={submit}
+              noValidate
               className="min-h-0 flex-1 overflow-y-auto px-6 py-4 [scrollbar-width:thin]"
             >
               {error && (
@@ -1067,26 +1457,39 @@ export default function PublicOrderPage() {
                   <label htmlFor="co-name" className={labelClass}>{t("name")}</label>
                   <input
                     id="co-name"
-                    required
                     autoComplete="name"
                     value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className={inputClass}
+                    onChange={(e) => updateField("name", e.target.value)}
+                    aria-invalid={!!fieldErrors.name}
+                    aria-describedby={fieldErrors.name ? "co-name-err" : undefined}
+                    className={fieldErrors.name ? inputErrorClass : inputClass}
                   />
+                  {fieldErrors.name && (
+                    <p id="co-name-err" className={fieldErrorClass}>{fieldErrors.name}</p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="co-phone" className={labelClass}>{t("phone")}</label>
                   <input
                     id="co-phone"
-                    required
                     type="tel"
                     inputMode="tel"
-                    minLength={6}
                     autoComplete="tel"
                     value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    className={inputClass}
+                    onChange={(e) => updateField("phone", e.target.value)}
+                    aria-invalid={!!fieldErrors.phone}
+                    aria-describedby={
+                      fieldErrors.phone ? "co-phone-err" : "co-phone-hint"
+                    }
+                    className={fieldErrors.phone ? inputErrorClass : inputClass}
                   />
+                  {fieldErrors.phone ? (
+                    <p id="co-phone-err" className={fieldErrorClass}>{fieldErrors.phone}</p>
+                  ) : (
+                    <p id="co-phone-hint" className="mt-1 text-xs text-stone-500">
+                      {t("phone_hint")}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label htmlFor="co-email" className={labelClass}>
@@ -1098,9 +1501,14 @@ export default function PublicOrderPage() {
                     inputMode="email"
                     autoComplete="email"
                     value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    className={inputClass}
+                    onChange={(e) => updateField("email", e.target.value)}
+                    aria-invalid={!!fieldErrors.email}
+                    aria-describedby={fieldErrors.email ? "co-email-err" : undefined}
+                    className={fieldErrors.email ? inputErrorClass : inputClass}
                   />
+                  {fieldErrors.email && (
+                    <p id="co-email-err" className={fieldErrorClass}>{fieldErrors.email}</p>
+                  )}
                 </div>
               </div>
 
@@ -1140,7 +1548,15 @@ export default function PublicOrderPage() {
                        type="button"
                        role="radio"
                        aria-checked={form.delivery_type === mode}
-                       onClick={() => setForm({ ...form, delivery_type: mode })}
+                       onClick={() => {
+                         setForm((f) => ({ ...f, delivery_type: mode }));
+                         setFieldErrors((prev) => {
+                           const next = { ...prev };
+                           delete next.delivery_address;
+                           delete next.postal_code;
+                           return next;
+                         });
+                       }}
                        className={`flex-1 cursor-pointer rounded-xl border-2 px-3 py-3 text-sm font-bold capitalize transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
                          form.delivery_type === mode
                            ? "border-amber-600 bg-amber-50 text-amber-900"
@@ -1157,12 +1573,20 @@ export default function PublicOrderPage() {
                       <label htmlFor="co-address" className={labelClass}>{t("delivery_address")}</label>
                       <input
                         id="co-address"
-                        required
                         autoComplete="street-address"
                         value={form.delivery_address}
-                        onChange={(e) => setForm({ ...form, delivery_address: e.target.value })}
-                        className={inputClass}
+                        onChange={(e) => updateField("delivery_address", e.target.value)}
+                        aria-invalid={!!fieldErrors.delivery_address}
+                        aria-describedby={
+                          fieldErrors.delivery_address ? "co-address-err" : undefined
+                        }
+                        className={fieldErrors.delivery_address ? inputErrorClass : inputClass}
                       />
+                      {fieldErrors.delivery_address && (
+                        <p id="co-address-err" className={fieldErrorClass}>
+                          {fieldErrors.delivery_address}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label htmlFor="co-postal" className={labelClass}>
@@ -1175,15 +1599,22 @@ export default function PublicOrderPage() {
                       </label>
                       <input
                         id="co-postal"
-                        required
                         inputMode="numeric"
-                        pattern={menu.currency === "SGD" ? "\\d{6}" : "\\d{5,6}"}
                         maxLength={6}
                         autoComplete="postal-code"
                         value={form.postal_code}
-                        onChange={(e) => setForm({ ...form, postal_code: e.target.value })}
-                        className={`${inputClass} w-40`}
+                        onChange={(e) => updateField("postal_code", e.target.value)}
+                        aria-invalid={!!fieldErrors.postal_code}
+                        aria-describedby={
+                          fieldErrors.postal_code ? "co-postal-err" : undefined
+                        }
+                        className={`${fieldErrors.postal_code ? inputErrorClass : inputClass} w-40`}
                       />
+                      {fieldErrors.postal_code && (
+                        <p id="co-postal-err" className={fieldErrorClass}>
+                          {fieldErrors.postal_code}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
