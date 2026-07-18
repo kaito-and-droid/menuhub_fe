@@ -649,6 +649,7 @@ export default function SettingsPage() {
                 instagram_handle: orderPage.instagram_handle?.trim() || null,
                 tiktok_username: orderPage.tiktok_username?.trim() || null,
                 facebook_page_url: orderPage.facebook_page_url?.trim() || null,
+                media_gallery: galleryItems,
               },
             })
           }
