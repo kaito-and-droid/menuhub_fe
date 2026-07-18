@@ -428,14 +428,34 @@ export default function PublicOrderPage() {
   return (
     <main className="min-h-screen bg-[#faf6f0] pb-32">
       {/* Hero header */}
-      <header className="bg-gradient-to-b from-amber-900 to-amber-800 px-4 pb-12 pt-8 text-amber-50">
-        <div className="mx-auto max-w-lg">
+      <header className="relative overflow-hidden px-4 pb-12 pt-8 text-amber-50">
+        {menu.order_page?.banner_image_url ? (
+          <>
+            <img
+              src={menu.order_page.banner_image_url}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-stone-900/80 to-stone-900/40" />
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-b from-amber-900 to-amber-800" />
+        )}
+        <div className="relative mx-auto max-w-lg">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
             Order online
           </p>
           <h1 className="mt-1 text-3xl font-bold [font-family:var(--font-display)]">
             {menu.shop_name}
           </h1>
+          {menu.order_page?.banner_headline && (
+            <h2 className="mt-2 text-lg font-semibold text-amber-100">
+              {menu.order_page.banner_headline}
+            </h2>
+          )}
+          {menu.order_page?.banner_subtitle && (
+            <p className="mt-0.5 text-sm text-white/80">{menu.order_page.banner_subtitle}</p>
+          )}
           <div className="mt-3 flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-medium">
               <IconClock /> ~{menu.estimated_wait_minutes} min prep
@@ -448,38 +468,6 @@ export default function PublicOrderPage() {
           </div>
         </div>
       </header>
-
-      {/* Shop banner (admin-configured) */}
-      {menu.order_page && (menu.order_page.banner_headline || menu.order_page.banner_image_url) && (
-        <section aria-label="Shop banner" className="mx-auto max-w-lg px-4 pt-4">
-          <article className="relative overflow-hidden rounded-2xl shadow-[0_4px_20px_rgba(120,80,40,0.15)]">
-            {menu.order_page.banner_image_url ? (
-              <>
-                <img
-                  src={menu.order_page.banner_image_url}
-                  alt=""
-                  loading="lazy"
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-stone-900/70 to-stone-900/20" />
-              </>
-            ) : (
-              <div className="absolute inset-0 bg-gradient-to-br from-amber-700 to-amber-900" />
-            )}
-            <div className="relative p-5 text-white">
-              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-amber-200">
-                {menu.shop_name}
-              </p>
-              <h3 className="mt-1 text-xl font-bold [font-family:var(--font-display)]">
-                {menu.order_page.banner_headline}
-              </h3>
-              {menu.order_page.banner_subtitle && (
-                <p className="mt-1 text-sm text-white/85">{menu.order_page.banner_subtitle}</p>
-              )}
-            </div>
-          </article>
-        </section>
-      )}
 
       {/* Announcement bar */}
       {menu.order_page?.announcement && (
