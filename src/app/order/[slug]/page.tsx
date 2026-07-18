@@ -166,6 +166,19 @@ function loadMember(slug: string): MemberRecord | null {
   }
 }
 
+function cartStorageKey(slug: string) {
+  return `menuhub_cart:${slug}`;
+}
+function loadCart(slug: string): Record<string, number> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(cartStorageKey(slug));
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+}
+
 export default function PublicOrderPage() {
   const { slug } = useParams<{ slug: string }>();
   const [menu, setMenu] = useState<PublicMenu | null>(null);
@@ -184,6 +197,9 @@ export default function PublicOrderPage() {
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
+    const savedCart = loadCart(slug);
+    if (Object.keys(savedCart).length > 0) setCart(savedCart);
+
     if (slug === "demo") {
       // ── DEV MOCK: no backend needed — visit /order/demo ──
       setMenu(MOCK_MENU);
@@ -205,6 +221,15 @@ export default function PublicOrderPage() {
       setForm((f) => ({ ...f, ...member }));
     }
   }, [slug]);
+
+  useEffect(() => {
+    const clean = Object.fromEntries(Object.entries(cart).filter(([, qty]) => qty > 0));
+    if (Object.keys(clean).length === 0) {
+      localStorage.removeItem(cartStorageKey(slug));
+    } else {
+      localStorage.setItem(cartStorageKey(slug), JSON.stringify(clean));
+    }
+  }, [cart, slug]);
 
   const allItems = useMemo(() => {
     const map: Record<string, PublicMenuItem> = {};
