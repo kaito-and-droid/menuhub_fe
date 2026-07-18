@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { API_URL, api, getSession } from "@/lib/api";
+import type { GalleryItem } from "@/lib/types";
 
 interface SeoConfig {
   title_template: string | null;
@@ -22,6 +23,7 @@ interface OrderPageConfig {
   instagram_handle: string | null;
   tiktok_username: string | null;
   facebook_page_url: string | null;
+  media_gallery: GalleryItem[];
 }
 
 interface ShopSettings {
@@ -80,7 +82,12 @@ export default function SettingsPage() {
     instagram_handle: "",
     tiktok_username: "",
     facebook_page_url: "",
+    media_gallery: [],
   });
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+  const [tiktokUrl, setTiktokUrl] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [galleryMsg, setGalleryMsg] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -117,7 +124,9 @@ export default function SettingsPage() {
         instagram_handle: data.order_page.instagram_handle ?? "",
         tiktok_username: data.order_page.tiktok_username ?? "",
         facebook_page_url: data.order_page.facebook_page_url ?? "",
+        media_gallery: data.order_page.media_gallery ?? [],
       });
+      setGalleryItems(data.order_page.media_gallery ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load settings");
     }
@@ -126,6 +135,46 @@ export default function SettingsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function syncFacebook() {
+    setSyncing(true);
+    setGalleryMsg(null);
+    try {
+      const items = await api<GalleryItem[]>(`${base}/gallery/sync-facebook`, { method: "POST" });
+      setGalleryItems(items);
+      setGalleryMsg(`Synced ${items.filter((i) => i.source === "facebook_photo").length} Facebook photos`);
+    } catch (err) {
+      setGalleryMsg(`Failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function addTikTok() {
+    if (!tiktokUrl.trim()) return;
+    setGalleryMsg(null);
+    try {
+      const items = await api<GalleryItem[]>(`${base}/gallery/tiktok`, {
+        method: "POST",
+        body: { url: tiktokUrl.trim() },
+      });
+      setGalleryItems(items);
+      setTiktokUrl("");
+      setGalleryMsg("TikTok video added");
+    } catch (err) {
+      setGalleryMsg(`Failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  }
+
+  async function deleteGalleryItem(itemId: string) {
+    setGalleryMsg(null);
+    try {
+      const items = await api<GalleryItem[]>(`${base}/gallery/${itemId}`, { method: "DELETE" });
+      setGalleryItems(items);
+    } catch (err) {
+      setGalleryMsg(`Failed: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  }
 
   async function save(body: Record<string, unknown>) {
     setBusy(true);
@@ -152,7 +201,9 @@ export default function SettingsPage() {
         instagram_handle: data.order_page.instagram_handle ?? "",
         tiktok_username: data.order_page.tiktok_username ?? "",
         facebook_page_url: data.order_page.facebook_page_url ?? "",
+        media_gallery: data.order_page.media_gallery ?? [],
       });
+      setGalleryItems(data.order_page.media_gallery ?? []);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
@@ -605,6 +656,89 @@ export default function SettingsPage() {
         >
           Save order page settings
         </button>
+      </section>
+
+      <section className="mb-6 rounded-lg bg-white p-5 shadow-sm">
+        <h2 className="mb-3 font-semibold text-stone-800">Media gallery</h2>
+        <p className="mb-3 text-xs text-stone-500">
+          Show photos from your Facebook Page and TikTok videos on your order page. Gallery
+          items appear below the promo carousel for customers to browse.
+        </p>
+
+        {galleryMsg && (
+          <p className="mb-3 rounded-md bg-blue-50 p-2 text-xs font-medium text-blue-800">{galleryMsg}</p>
+        )}
+
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={syncing}
+            onClick={syncFacebook}
+            className="cursor-pointer rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {syncing ? "Syncing…" : "Sync Facebook photos"}
+          </button>
+        </div>
+
+        <div className="mb-4 flex items-end gap-2">
+          <div className="flex-1">
+            <label className="mb-1 block text-xs font-medium text-stone-500">TikTok video URL</label>
+            <input
+              value={tiktokUrl}
+              onChange={(e) => setTiktokUrl(e.target.value)}
+              placeholder="https://www.tiktok.com/@shop/video/123…"
+              className={inputClass}
+            />
+          </div>
+          <button
+            type="button"
+            disabled={!tiktokUrl.trim()}
+            onClick={addTikTok}
+            className="cursor-pointer rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            Add
+          </button>
+        </div>
+
+        {galleryItems.length > 0 ? (
+          <div className="space-y-2">
+            {[...galleryItems]
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-3 rounded-md bg-stone-50 p-2"
+                >
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-stone-200">
+                    {item.thumbnail_url ? (
+                      <img src={item.thumbnail_url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs text-stone-400">
+                        {item.source === "tiktok" ? "🎵" : "📷"}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-stone-800">
+                      {item.source === "tiktok" ? "TikTok video" : "Facebook photo"}
+                    </p>
+                    {item.source_url && (
+                      <p className="truncate text-xs text-stone-500">{item.source_url}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => deleteGalleryItem(item.id)}
+                    className="cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+          </div>
+        ) : (
+          <p className="text-sm text-stone-400">No media items yet. Sync from Facebook or add a TikTok URL.</p>
+        )}
       </section>
 
       <section className="rounded-lg bg-white p-5 shadow-sm">
