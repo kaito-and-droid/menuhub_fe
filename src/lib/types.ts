@@ -13,6 +13,7 @@ export interface AdminItem {
   cost: number | null;
   margin: string | null;
   image_url: string | null;
+  image_urls: string[];
   is_available: boolean;
   ingredients: unknown[];
   variants: ItemVariant[];
@@ -112,6 +113,7 @@ export interface PublicMenuItem {
   description: string | null;
   price: number;
   image_url: string | null;
+  image_urls: string[];
   is_available: boolean;
   variants: { name: string; price: number }[];
 }

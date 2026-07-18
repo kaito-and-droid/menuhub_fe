@@ -25,6 +25,7 @@ interface ItemForm {
   price: string;
   cost: string;
   image_url: string;
+  image_urls: string;
   category_id: string;
   is_available: boolean;
   recipe: RecipeRow[];
@@ -38,6 +39,7 @@ const emptyForm: ItemForm = {
   price: "",
   cost: "",
   image_url: "",
+  image_urls: "",
   category_id: "",
   is_available: true,
   recipe: [],
@@ -124,6 +126,10 @@ export default function MenuPage() {
       price: String(item.price),
       cost: item.cost !== null ? String(item.cost) : "",
       image_url: item.image_url ?? "",
+      // image_urls from the API includes the primary image_url first; show only the extras.
+      image_urls: (item.image_urls ?? [])
+        .filter((u) => u && u !== item.image_url)
+        .join("\n"),
       category_id: item.category_id ?? "",
       is_available: item.is_available,
       recipe: (item.ingredients as RecipeLine[]).map((line) => ({
@@ -155,6 +161,10 @@ export default function MenuPage() {
       price: Number(form.price),
       cost: form.cost === "" ? null : Number(form.cost),
       image_url: form.image_url.trim() || null,
+      image_urls: form.image_urls
+        .split("\n")
+        .map((u) => u.trim())
+        .filter(Boolean),
       category_id: form.category_id || null,
       is_available: form.is_available,
       ingredients: form.recipe
@@ -453,6 +463,18 @@ export default function MenuPage() {
             <input
               value={form.image_url}
               onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+              className="mb-3 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            />
+
+            <label className="mb-1 block text-sm font-medium text-stone-700">
+              Additional images{" "}
+              <span className="font-normal text-stone-500">(one URL per line — shown as a carousel)</span>
+            </label>
+            <textarea
+              value={form.image_urls}
+              onChange={(e) => setForm({ ...form, image_urls: e.target.value })}
+              rows={3}
+              placeholder={"https://…/photo-2.jpg\nhttps://…/photo-3.jpg"}
               className="mb-3 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
             />
 
