@@ -1,3 +1,9 @@
+export interface ItemVariant {
+  name: string;
+  price: number;
+  cost?: number | null;
+}
+
 export interface AdminItem {
   id: string;
   category_id: string | null;
@@ -9,6 +15,7 @@ export interface AdminItem {
   image_url: string | null;
   is_available: boolean;
   ingredients: unknown[];
+  variants: ItemVariant[];
 }
 
 export interface AdminCategory {
@@ -33,6 +40,7 @@ export interface OrderItemLine {
   unit_price: number;
   subtotal: number;
   notes: string | null;
+  variant_name: string | null;
 }
 
 export interface Order {
@@ -105,6 +113,7 @@ export interface PublicMenuItem {
   price: number;
   image_url: string | null;
   is_available: boolean;
+  variants: { name: string; price: number }[];
 }
 
 export type DiscountType = "none" | "percent" | "fixed";
@@ -136,6 +145,13 @@ export interface Campaign {
   discount_label: string | null;
 }
 
+export interface SeoConfig {
+  title_template: string | null;
+  description: string | null;
+  keywords: string | null;
+  og_image_url: string | null;
+}
+
 export interface PublicMenu {
   shop_name: string;
   facebook_page_id: string | null;
@@ -144,6 +160,7 @@ export interface PublicMenu {
   payment_methods: string[];
   campaigns: PublicCampaign[];
   categories: { name: string; items: PublicMenuItem[] }[];
+  seo: SeoConfig | null;
 }
 
 export interface RevenueAnalytics {

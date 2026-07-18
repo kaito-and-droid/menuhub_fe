@@ -9,7 +9,19 @@ import { QRCodeSVG } from "qrcode.react";
 import { publicApi } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { PublicCampaign, PublicMenu, PublicMenuItem } from "@/lib/types";
+import { MOCK_MENU, makeMockOrder } from "@/lib/mock-menu";
 
+
+/** Composite cart key: itemId or "itemId::variantName" */
+function cartKey(id: string, variant?: string | null): string {
+  return variant ? `${id}::${variant}` : id;
+}
+
+function parseCartKey(key: string): { itemId: string; variantName: string | null } {
+  const sep = key.indexOf("::");
+  if (sep === -1) return { itemId: key, variantName: null };
+  return { itemId: key.slice(0, sep), variantName: key.slice(sep + 2) || null };
+}
 
 interface CreatedOrder {
   id: string;
@@ -154,6 +166,7 @@ export default function PublicOrderPage() {
   const [menu, setMenu] = useState<PublicMenu | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [cart, setCart] = useState<Record<string, number>>({});
+  const [selectedVariant, setSelectedVariant] = useState<Record<string, string>>({});
   const [checkout, setCheckout] = useState(false);
   const [placed, setPlaced] = useState<CreatedOrder | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +179,13 @@ export default function PublicOrderPage() {
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
+    if (slug === "demo") {
+      // ── DEV MOCK: no backend needed — visit /order/demo ──
+      setMenu(MOCK_MENU);
+      setActiveCategory(MOCK_MENU.categories[0]?.name ?? null);
+      setForm((f) => ({ ...f, payment_method: MOCK_MENU.payment_methods[0] ?? "cash" }));
+      return;
+    }
     publicApi<PublicMenu>(`/api/public/shops/${slug}/menu`)
       .then((data) => {
         setMenu(data);
@@ -187,10 +207,23 @@ export default function PublicOrderPage() {
     return map;
   }, [menu]);
 
+  function itemPrice(itemId: string, variantName: string | null): number {
+    const item = allItems[itemId];
+    if (!item) return 0;
+    if (variantName && item.variants) {
+      const v = item.variants.find((v) => v.name === variantName);
+      if (v) return v.price;
+    }
+    return item.price;
+  }
+
   const cartLines = Object.entries(cart).filter(([, qty]) => qty > 0);
   const cartCount = cartLines.reduce((n, [, q]) => n + q, 0);
   const subtotal = cartLines.reduce(
-    (sum, [id, qty]) => sum + (allItems[id]?.price ?? 0) * qty,
+    (sum, [key, qty]) => {
+      const { itemId, variantName } = parseCartKey(key);
+      return sum + itemPrice(itemId, variantName) * qty;
+    },
     0,
   );
   const preview = computeDiscount(subtotal, menu?.campaigns ?? []);
@@ -203,8 +236,9 @@ export default function PublicOrderPage() {
     )
     .sort((a, b) => a.min_order_amount - b.min_order_amount)[0];
 
-  function adjust(id: string, delta: number) {
-    setCart((c) => ({ ...c, [id]: Math.max(0, (c[id] ?? 0) + delta) }));
+  function adjust(id: string, delta: number, variant?: string | null) {
+    const key = cartKey(id, variant);
+    setCart((c) => ({ ...c, [key]: Math.max(0, (c[key] ?? 0) + delta) }));
   }
 
   function scrollToCategory(name: string) {
@@ -224,25 +258,37 @@ export default function PublicOrderPage() {
     setBusy(true);
     setError(null);
     try {
-      const order = await publicApi<CreatedOrder>(`/api/public/shops/${slug}/orders`, {
-        method: "POST",
-        body: {
-          customer: {
-            name: form.name.trim(),
-            phone: form.phone.trim(),
-            email: form.email.trim() || null,
-            address: form.delivery_address.trim() || null,
+      let order: CreatedOrder;
+
+      if (slug === "demo") {
+        // ── DEV MOCK: simulate network delay then return fake order ──
+        await new Promise((r) => setTimeout(r, 800));
+        order = makeMockOrder(total, subtotal, preview.amount) as CreatedOrder;
+      } else {
+        order = await publicApi<CreatedOrder>(`/api/public/shops/${slug}/orders`, {
+          method: "POST",
+          body: {
+            customer: {
+              name: form.name.trim(),
+              phone: form.phone.trim(),
+              email: form.email.trim() || null,
+              address: form.delivery_address.trim() || null,
+            },
+            items: cartLines.map(([key, qty]) => {
+              const { itemId, variantName } = parseCartKey(key);
+              return { menu_item_id: itemId, quantity: qty, variant_name: variantName };
+            }),
+            delivery_type: form.delivery_type,
+            delivery_address:
+              form.delivery_type === "delivery" ? form.delivery_address.trim() : null,
+            postal_code:
+              form.delivery_type === "delivery" ? form.postal_code.trim() : null,
+            payment_method: form.payment_method,
+            notes: form.notes.trim() || null,
           },
-          items: cartLines.map(([id, qty]) => ({ menu_item_id: id, quantity: qty })),
-          delivery_type: form.delivery_type,
-          delivery_address:
-            form.delivery_type === "delivery" ? form.delivery_address.trim() : null,
-          postal_code:
-            form.delivery_type === "delivery" ? form.postal_code.trim() : null,
-          payment_method: form.payment_method,
-          notes: form.notes.trim() || null,
-        },
-      });
+        });
+      }
+
       if (isMember) {
         localStorage.setItem(
           memberKey(slug),
@@ -482,64 +528,103 @@ export default function PublicOrderPage() {
             <h2 className="mb-3 text-xl font-bold text-stone-900 [font-family:var(--font-display)]">
               {category.name}
             </h2>
-            <div className="space-y-3">
+            {/* Horizontal image-card scroll strip */}
+            <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               {category.items.map((item) => {
-                const qty = cart[item.id] ?? 0;
+                const hasVariants = item.variants && item.variants.length > 0;
+                const selVariant = hasVariants ? (selectedVariant[item.id] ?? item.variants[0].name) : null;
+                const displayPrice = hasVariants
+                  ? item.variants.find((v) => v.name === selVariant)?.price ?? item.price
+                  : item.price;
+                const itemKeys = hasVariants
+                  ? item.variants.map((v) => cartKey(item.id, v.name))
+                  : [cartKey(item.id)];
+                const totalQty = itemKeys.reduce((n, k) => n + (cart[k] ?? 0), 0);
+                const curKey = cartKey(item.id, selVariant);
+                const curQty = cart[curKey] ?? 0;
                 return (
                   <article
                     key={item.id}
-                    className={`flex gap-3 rounded-2xl bg-white p-3 shadow-[0_2px_12px_rgba(120,80,40,0.07)] transition-shadow duration-200 hover:shadow-[0_4px_20px_rgba(120,80,40,0.13)] ${
-                      qty > 0 ? "ring-2 ring-amber-600/60" : ""
+                    className={`relative flex w-40 shrink-0 snap-start flex-col overflow-hidden rounded-2xl bg-white shadow-[0_2px_12px_rgba(120,80,40,0.07)] transition-all duration-200 hover:shadow-[0_6px_24px_rgba(120,80,40,0.15)] ${
+                      totalQty > 0 ? "ring-2 ring-amber-600/70" : ""
                     }`}
                   >
+                    {/* Image */}
                     {item.image_url ? (
                       <img
                         src={item.image_url}
                         alt={item.name}
                         loading="lazy"
-                        className="h-20 w-20 shrink-0 rounded-xl object-cover"
+                        className="h-36 w-full object-cover"
                       />
                     ) : (
                       <div
                         aria-hidden
-                        className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 text-2xl font-bold text-amber-800 [font-family:var(--font-display)]"
+                        className="flex h-36 w-full items-center justify-center bg-gradient-to-br from-amber-100 to-amber-200 text-4xl font-bold text-amber-700 [font-family:var(--font-display)]"
                       >
                         {item.name.charAt(0)}
                       </div>
                     )}
-                    <div className="flex min-w-0 flex-1 flex-col">
-                      <h3 className="font-bold text-stone-900">{item.name}</h3>
-                      {item.description && (
-                        <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-stone-500">
-                          {item.description}
-                        </p>
+
+                    {/* Cart badge */}
+                    {totalQty > 0 && (
+                      <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-amber-700 text-[11px] font-bold text-white shadow">
+                        {totalQty}
+                      </span>
+                    )}
+
+                    {/* Info */}
+                    <div className="flex flex-1 flex-col p-2.5">
+                      <h3 className="line-clamp-2 text-sm font-bold leading-snug text-stone-900">
+                        {item.name}
+                      </h3>
+                      <p className="mt-1 text-xs font-semibold text-amber-800">
+                        {money(displayPrice)}
+                      </p>
+
+                      {/* Variant selector */}
+                      {hasVariants && (
+                        <select
+                          value={selVariant ?? ""}
+                          onChange={(e) =>
+                            setSelectedVariant({ ...selectedVariant, [item.id]: e.target.value })
+                          }
+                          className="mt-1 w-full rounded-md border border-stone-200 px-1.5 py-1 text-[11px] focus:border-amber-500 focus:outline-none"
+                        >
+                          {item.variants.map((v) => (
+                            <option key={v.name} value={v.name}>
+                              {v.name} — {money(v.price)}
+                            </option>
+                          ))}
+                        </select>
                       )}
-                      <div className="mt-auto flex items-center justify-between pt-1">
-                        <p className="font-bold text-amber-800">{money(item.price)}</p>
-                        {qty === 0 ? (
+
+                      {/* Add / stepper */}
+                      <div className="mt-auto pt-2">
+                        {curQty === 0 ? (
                           <button
-                            onClick={() => adjust(item.id, +1)}
+                            onClick={() => adjust(item.id, +1, selVariant)}
                             aria-label={`Add ${item.name}`}
-                            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-amber-700 text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+                            className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-xl bg-amber-700 py-1.5 text-xs font-bold text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                           >
-                            <IconPlus />
+                            <IconPlus /> Add
                           </button>
                         ) : (
-                          <div className="flex items-center gap-1 rounded-full bg-amber-50 p-1">
+                          <div className="flex items-center justify-between rounded-xl bg-amber-50 px-1 py-1">
                             <button
-                              onClick={() => adjust(item.id, -1)}
+                              onClick={() => adjust(item.id, -1, selVariant)}
                               aria-label={`Remove one ${item.name}`}
-                              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-amber-800 transition-colors duration-200 hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-amber-800 transition-colors duration-200 hover:bg-amber-100 focus:outline-none"
                             >
                               <IconMinus />
                             </button>
-                            <span className="w-6 text-center text-sm font-bold text-stone-900" aria-live="polite">
-                              {qty}
+                            <span className="w-5 text-center text-sm font-bold text-stone-900" aria-live="polite">
+                              {curQty}
                             </span>
                             <button
-                              onClick={() => adjust(item.id, +1)}
+                              onClick={() => adjust(item.id, +1, selVariant)}
                               aria-label={`Add one ${item.name}`}
-                              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-amber-700 text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-amber-700 text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none"
                             >
                               <IconPlus />
                             </button>
@@ -589,275 +674,301 @@ export default function PublicOrderPage() {
       {/* Checkout sheet */}
       {checkout && (
         <div className="fixed inset-0 z-20 flex items-end justify-center bg-stone-900/50 backdrop-blur-sm sm:items-center sm:p-4">
-          <form
-            onSubmit={submit}
-            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-6 sm:rounded-3xl"
-          >
-            <div className="mb-4 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setCheckout(false)}
-                aria-label="Back to menu"
-                className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-stone-100 text-stone-600 transition-colors duration-200 hover:bg-stone-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-              >
-                <IconChevronLeft />
-              </button>
-              <h2 className="text-xl font-bold text-stone-900 [font-family:var(--font-display)]">
-                Your order
-              </h2>
-            </div>
+          {/* Sheet container — fixed height, flex column so children can stick */}
+          <div className="flex max-h-[92vh] w-full max-w-lg flex-col rounded-t-3xl bg-white sm:rounded-3xl">
 
-            {/* Summary */}
-            <ul className="mb-4 divide-y divide-stone-100 rounded-2xl bg-stone-50 px-4">
-              {cartLines.map(([id, qty]) => (
-                <li key={id} className="flex items-center justify-between gap-2 py-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 rounded-full bg-white p-0.5 shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => adjust(id, -1)}
-                        aria-label={`Remove one ${allItems[id]?.name}`}
-                        className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-amber-800 hover:bg-amber-50"
-                      >
-                        <IconMinus />
-                      </button>
-                      <span className="w-4 text-center text-xs font-bold">{qty}</span>
-                      <button
-                        type="button"
-                        onClick={() => adjust(id, +1)}
-                        aria-label={`Add one ${allItems[id]?.name}`}
-                        className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-amber-800 hover:bg-amber-50"
-                      >
-                        <IconPlus />
-                      </button>
-                    </div>
-                    <span className="font-medium text-stone-800">{allItems[id]?.name}</span>
-                  </div>
-                  <span className="font-semibold text-stone-900">
-                    {money((allItems[id]?.price ?? 0) * qty)} ₫
-                  </span>
-                </li>
-              ))}
-              {preview.amount > 0 && (
-                <li className="flex items-center justify-between py-3 text-sm font-semibold text-green-700">
-                  <span className="flex items-center gap-1.5">
-                    <IconTag /> {preview.campaign?.title ?? "Promotion"}
-                  </span>
-                  <span>−{money(preview.amount)}</span>
-                </li>
-              )}
-              <li className="flex justify-between py-3 font-bold text-stone-900">
-                <span>Total</span>
-                <span className="text-amber-800">
-                  {preview.amount > 0 && (
-                    <span className="mr-2 text-sm font-medium text-stone-500 line-through">
-                      {money(subtotal)}
-                    </span>
-                  )}
-                  {money(total)}
-                </span>
-              </li>
-            </ul>
-
-            {error && (
-              <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm font-medium text-red-700">
-                {error}
-              </p>
-            )}
-
-            {/* Contact info */}
-            <div className="mb-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-stone-500">
-                  <IconUser /> Your details
-                </h3>
-                {returningMember && (
-                  <button
-                    type="button"
-                    onClick={forgetMember}
-                    className="cursor-pointer text-xs font-medium text-stone-500 transition-colors duration-200 hover:text-red-600"
-                  >
-                    Not {returningMember.name.split(" ")[0]}? Clear
-                  </button>
-                )}
-              </div>
-              <div>
-                <label htmlFor="co-name" className={labelClass}>Name</label>
-                <input
-                  id="co-name"
-                  required
-                  autoComplete="name"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label htmlFor="co-phone" className={labelClass}>Phone number</label>
-                <input
-                  id="co-phone"
-                  required
-                  type="tel"
-                  inputMode="tel"
-                  minLength={6}
-                  autoComplete="tel"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label htmlFor="co-email" className={labelClass}>
-                  Email <span className="font-normal text-stone-500">(optional)</span>
-                </label>
-                <input
-                  id="co-email"
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className={inputClass}
-                />
+            {/* ── STICKY HEADER: title ── */}
+            <div className="shrink-0 rounded-t-3xl bg-white px-6 pt-6 pb-3 sm:rounded-t-3xl">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCheckout(false)}
+                  aria-label="Back to menu"
+                  className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-stone-100 text-stone-600 transition-colors duration-200 hover:bg-stone-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                >
+                  <IconChevronLeft />
+                </button>
+                <h2 className="text-xl font-bold text-stone-900 [font-family:var(--font-display)]">
+                  Your order
+                </h2>
               </div>
             </div>
 
-            {/* Membership opt-in */}
-            <label
-              htmlFor="co-member"
-              className={`mb-4 flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-4 transition-colors duration-200 ${
-                isMember ? "border-amber-600 bg-amber-50" : "border-stone-200 hover:border-amber-300"
-              }`}
-            >
-              <input
-                id="co-member"
-                type="checkbox"
-                checked={isMember}
-                onChange={(e) => setIsMember(e.target.checked)}
-                className="mt-1 h-5 w-5 cursor-pointer accent-amber-700"
-              />
-              <span>
-                <span className="flex items-center gap-1.5 font-bold text-stone-900">
-                  <IconSparkle /> Become a member — it&apos;s free
-                </span>
-                <span className="mt-0.5 block text-xs leading-relaxed text-stone-500">
-                  We&apos;ll remember your details on this device for one-tap checkout, and the
-                  shop can reward you as a returning customer. Untick to order as a guest.
-                </span>
-              </span>
-            </label>
-
-            {/* Delivery */}
-            <div className="mb-4">
-              <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-stone-500">
-                Receive it
-              </h3>
-              <div className="flex gap-2" role="radiogroup" aria-label="Delivery type">
-                {(["pickup", "delivery"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    role="radio"
-                    aria-checked={form.delivery_type === mode}
-                    onClick={() => setForm({ ...form, delivery_type: mode })}
-                    className={`flex-1 cursor-pointer rounded-xl border-2 px-3 py-3 text-sm font-bold capitalize transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
-                      form.delivery_type === mode
-                        ? "border-amber-600 bg-amber-50 text-amber-900"
-                        : "border-stone-200 text-stone-500 hover:border-amber-300"
-                    }`}
-                  >
-                    {mode}
-                  </button>
-                ))}
-              </div>
-              {form.delivery_type === "delivery" && (
-                <div className="mt-3 space-y-3">
-                  <div>
-                    <label htmlFor="co-address" className={labelClass}>Delivery address</label>
-                    <input
-                      id="co-address"
-                      required
-                      autoComplete="street-address"
-                      value={form.delivery_address}
-                      onChange={(e) => setForm({ ...form, delivery_address: e.target.value })}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="co-postal" className={labelClass}>
-                      Postal code{" "}
-                      <span className="font-normal text-stone-500">
-                        ({menu.currency === "SGD" ? "6 digits" : "5-6 digits"})
+            {/* ── STICKY ORDER SUMMARY: items + total ── */}
+            <div className="shrink-0 border-b border-stone-100 bg-white px-6 pb-4">
+              <ul className="divide-y divide-stone-100 rounded-2xl bg-stone-50 px-4">
+                {cartLines.map(([key, qty]) => {
+                  const { itemId, variantName } = parseCartKey(key);
+                  const item = allItems[itemId];
+                  const label = variantName ? `${item?.name} (${variantName})` : (item?.name ?? key);
+                  const price = itemPrice(itemId, variantName);
+                  return (
+                    <li key={key} className="flex items-center justify-between gap-2 py-2.5 text-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 rounded-full bg-white p-0.5 shadow-sm">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const { itemId: id, variantName: vn } = parseCartKey(key);
+                              adjust(id, -1, vn);
+                            }}
+                            aria-label={`Remove one ${label}`}
+                            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-amber-800 hover:bg-amber-50"
+                          >
+                            <IconMinus />
+                          </button>
+                          <span className="w-4 text-center text-xs font-bold">{qty}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const { itemId: id, variantName: vn } = parseCartKey(key);
+                              adjust(id, +1, vn);
+                            }}
+                            aria-label={`Add one ${label}`}
+                            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-amber-800 hover:bg-amber-50"
+                          >
+                            <IconPlus />
+                          </button>
+                        </div>
+                        <span className="font-medium text-stone-800">{label}</span>
+                      </div>
+                      <span className="font-semibold text-stone-900">
+                        {money(price * qty)}
                       </span>
-                    </label>
-                    <input
-                      id="co-postal"
-                      required
-                      inputMode="numeric"
-                      pattern={menu.currency === "SGD" ? "\\d{6}" : "\\d{5,6}"}
-                      maxLength={6}
-                      autoComplete="postal-code"
-                      value={form.postal_code}
-                      onChange={(e) => setForm({ ...form, postal_code: e.target.value })}
-                      className={`${inputClass} w-40`}
-                    />
-                  </div>
-                </div>
-              )}
+                    </li>
+                  );
+                })}
+                {preview.amount > 0 && (
+                  <li className="flex items-center justify-between py-2.5 text-sm font-semibold text-green-700">
+                    <span className="flex items-center gap-1.5">
+                      <IconTag /> {preview.campaign?.title ?? "Promotion"}
+                    </span>
+                    <span>−{money(preview.amount)}</span>
+                  </li>
+                )}
+                {/* Sticky total row */}
+                <li className="flex items-center justify-between py-3 font-bold text-stone-900">
+                  <span className="flex items-center gap-1.5">
+                    <IconBag />
+                    {cartCount} item{cartCount > 1 ? "s" : ""}
+                  </span>
+                  <span className="flex items-center gap-2 text-amber-800">
+                    {preview.amount > 0 && (
+                      <span className="text-sm font-medium text-stone-400 line-through">
+                        {money(subtotal)}
+                      </span>
+                    )}
+                    {money(total)}
+                  </span>
+                </li>
+              </ul>
             </div>
 
-            {/* Payment */}
-            <div className="mb-4">
-              <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-stone-500">
-                Pay with
-              </h3>
-              <div className="flex gap-2" role="radiogroup" aria-label="Payment method">
-                {menu.payment_methods.map((method) => (
-                  <button
-                    key={method}
-                    type="button"
-                    role="radio"
-                    aria-checked={form.payment_method === method}
-                    onClick={() => setForm({ ...form, payment_method: method })}
-                    className={`flex-1 cursor-pointer rounded-xl border-2 px-3 py-3 text-sm font-bold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
-                      form.payment_method === method
-                        ? "border-amber-600 bg-amber-50 text-amber-900"
-                        : "border-stone-200 text-stone-500 hover:border-amber-300"
-                    }`}
-                  >
-                    {PAYMENT_LABELS[method] ?? method}
-                  </button>
-                ))}
-              </div>
-              {form.payment_method === "paynow" && (
-                <p className="mt-2 text-xs text-stone-500">
-                  You&apos;ll get a PayNow QR to scan with your banking app after placing the
-                  order.
+            {/* ── SCROLLABLE FORM BODY ── */}
+            <form
+              onSubmit={submit}
+              className="min-h-0 flex-1 overflow-y-auto px-6 py-4 [scrollbar-width:thin]"
+            >
+              {error && (
+                <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm font-medium text-red-700">
+                  {error}
                 </p>
               )}
-            </div>
 
-            <div className="mb-5">
-              <label htmlFor="co-notes" className={labelClass}>
-                Notes <span className="font-normal text-stone-500">(optional)</span>
+              {/* Contact info */}
+              <div className="mb-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-stone-500">
+                    <IconUser /> Your details
+                  </h3>
+                  {returningMember && (
+                    <button
+                      type="button"
+                      onClick={forgetMember}
+                      className="cursor-pointer text-xs font-medium text-stone-500 transition-colors duration-200 hover:text-red-600"
+                    >
+                      Not {returningMember.name.split(" ")[0]}? Clear
+                    </button>
+                  )}
+                </div>
+                <div>
+                  <label htmlFor="co-name" className={labelClass}>Name</label>
+                  <input
+                    id="co-name"
+                    required
+                    autoComplete="name"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="co-phone" className={labelClass}>Phone number</label>
+                  <input
+                    id="co-phone"
+                    required
+                    type="tel"
+                    inputMode="tel"
+                    minLength={6}
+                    autoComplete="tel"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="co-email" className={labelClass}>
+                    Email <span className="font-normal text-stone-500">(optional)</span>
+                  </label>
+                  <input
+                    id="co-email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              {/* Membership opt-in */}
+              <label
+                htmlFor="co-member"
+                className={`mb-4 flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-4 transition-colors duration-200 ${
+                  isMember ? "border-amber-600 bg-amber-50" : "border-stone-200 hover:border-amber-300"
+                }`}
+              >
+                <input
+                  id="co-member"
+                  type="checkbox"
+                  checked={isMember}
+                  onChange={(e) => setIsMember(e.target.checked)}
+                  className="mt-1 h-5 w-5 cursor-pointer accent-amber-700"
+                />
+                <span>
+                  <span className="flex items-center gap-1.5 font-bold text-stone-900">
+                    <IconSparkle /> Become a member — it&apos;s free
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-stone-500">
+                    We&apos;ll remember your details on this device for one-tap checkout, and the
+                    shop can reward you as a returning customer. Untick to order as a guest.
+                  </span>
+                </span>
               </label>
-              <textarea
-                id="co-notes"
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="e.g. less sugar, call on arrival…"
-                className={`${inputClass} h-20 resize-none`}
-              />
-            </div>
 
-            <button
-              type="submit"
-              disabled={busy}
-              className="w-full cursor-pointer rounded-2xl bg-amber-700 py-4 text-base font-bold text-white shadow-[0_8px_30px_rgba(120,80,40,0.35)] transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
-            >
-              {busy ? "Placing your order…" : `Place order · ${money(total)}`}
-            </button>
-          </form>
+              {/* Delivery */}
+              <div className="mb-4">
+                <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-stone-500">
+                  Receive it
+                </h3>
+                <div className="flex gap-2" role="radiogroup" aria-label="Delivery type">
+                  {(["pickup", "delivery"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      role="radio"
+                      aria-checked={form.delivery_type === mode}
+                      onClick={() => setForm({ ...form, delivery_type: mode })}
+                      className={`flex-1 cursor-pointer rounded-xl border-2 px-3 py-3 text-sm font-bold capitalize transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+                        form.delivery_type === mode
+                          ? "border-amber-600 bg-amber-50 text-amber-900"
+                          : "border-stone-200 text-stone-500 hover:border-amber-300"
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+                {form.delivery_type === "delivery" && (
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <label htmlFor="co-address" className={labelClass}>Delivery address</label>
+                      <input
+                        id="co-address"
+                        required
+                        autoComplete="street-address"
+                        value={form.delivery_address}
+                        onChange={(e) => setForm({ ...form, delivery_address: e.target.value })}
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="co-postal" className={labelClass}>
+                        Postal code{" "}
+                        <span className="font-normal text-stone-500">
+                          ({menu.currency === "SGD" ? "6 digits" : "5-6 digits"})
+                        </span>
+                      </label>
+                      <input
+                        id="co-postal"
+                        required
+                        inputMode="numeric"
+                        pattern={menu.currency === "SGD" ? "\\d{6}" : "\\d{5,6}"}
+                        maxLength={6}
+                        autoComplete="postal-code"
+                        value={form.postal_code}
+                        onChange={(e) => setForm({ ...form, postal_code: e.target.value })}
+                        className={`${inputClass} w-40`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Payment */}
+              <div className="mb-4">
+                <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-stone-500">
+                  Pay with
+                </h3>
+                <div className="flex gap-2" role="radiogroup" aria-label="Payment method">
+                  {menu.payment_methods.map((method) => (
+                    <button
+                      key={method}
+                      type="button"
+                      role="radio"
+                      aria-checked={form.payment_method === method}
+                      onClick={() => setForm({ ...form, payment_method: method })}
+                      className={`flex-1 cursor-pointer rounded-xl border-2 px-3 py-3 text-sm font-bold transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+                        form.payment_method === method
+                          ? "border-amber-600 bg-amber-50 text-amber-900"
+                          : "border-stone-200 text-stone-500 hover:border-amber-300"
+                      }`}
+                    >
+                      {PAYMENT_LABELS[method] ?? method}
+                    </button>
+                  ))}
+                </div>
+                {form.payment_method === "paynow" && (
+                  <p className="mt-2 text-xs text-stone-500">
+                    You&apos;ll get a PayNow QR to scan with your banking app after placing the
+                    order.
+                  </p>
+                )}
+              </div>
+
+              <div className="mb-5">
+                <label htmlFor="co-notes" className={labelClass}>
+                  Notes <span className="font-normal text-stone-500">(optional)</span>
+                </label>
+                <textarea
+                  id="co-notes"
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  placeholder="e.g. less sugar, call on arrival…"
+                  className={`${inputClass} h-20 resize-none`}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full cursor-pointer rounded-2xl bg-amber-700 py-4 text-base font-bold text-white shadow-[0_8px_30px_rgba(120,80,40,0.35)] transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
+              >
+                {busy ? "Placing your order…" : `Place order · ${money(total)}`}
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </main>
