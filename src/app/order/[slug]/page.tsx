@@ -9,6 +9,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { publicApi } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { PublicCampaign, PublicMenu, PublicMenuItem } from "@/lib/types";
+import GallerySection from "@/components/GallerySection";
 import { MOCK_MENU, makeMockOrder } from "@/lib/mock-menu";
 
 
@@ -569,9 +570,17 @@ export default function PublicOrderPage() {
         </section>
       )}
 
+      {/* Gallery and social links */}
+      <GallerySection
+        items={menu.order_page?.media_gallery ?? []}
+        instagramHandle={menu.order_page?.instagram_handle}
+        tiktokUsername={menu.order_page?.tiktok_username}
+        facebookPageUrl={menu.order_page?.facebook_page_url}
+      />
+
       {/* Category chips */}
       {menu.categories.length > 1 && (
-        <nav className={`sticky top-0 z-10 px-4 ${menu.campaigns.length > 0 ? "mt-4" : "-mt-5"}`}>
+        <nav className={`sticky top-0 z-10 px-4 ${menu.campaigns.length > 0 || (menu.order_page?.media_gallery && menu.order_page.media_gallery.length > 0) ? "mt-4" : "-mt-5"}`}>
           <div className="mx-auto max-w-lg">
             <div className="flex gap-2 overflow-x-auto rounded-2xl bg-white p-2 shadow-[0_4px_20px_rgba(120,80,40,0.10)] [scrollbar-width:none]">
               {menu.categories.map((category) => (

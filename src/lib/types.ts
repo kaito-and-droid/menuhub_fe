@@ -152,6 +152,16 @@ export interface SeoConfig {
   og_image_url: string | null;
 }
 
+export interface GalleryItem {
+  id: string;
+  source: "facebook_photo" | "tiktok";
+  source_url: string | null;
+  thumbnail_url: string | null;
+  embed_html: string | null;
+  sort_order: number;
+  active: boolean;
+}
+
 export interface OrderPageConfig {
   banner_image_url: string | null;
   banner_headline: string | null;
@@ -164,6 +174,7 @@ export interface OrderPageConfig {
   instagram_handle: string | null;
   tiktok_username: string | null;
   facebook_page_url: string | null;
+  media_gallery: GalleryItem[];
 }
 
 export interface PublicMenu {
