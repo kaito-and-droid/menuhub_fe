@@ -26,7 +26,7 @@ function paymentLabel(method: string, locale: string): string {
   return locale === "vi" ? entry.vi : entry.en;
 }
 
-/* ---------- item card (shared by grid + list layouts) ---------- */
+/* ---------- item card (single-column: image carousel → description → variant + price) ---------- */
 const IconGrid = () => (
   <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
@@ -38,6 +38,91 @@ const IconList = () => (
   </svg>
 );
 
+/* ---------- image carousel (auto-advance + swipe + dots) ---------- */
+interface ItemImageCarouselProps {
+  images: string[];
+  name: string;
+  autoAdvanceMs?: number;
+}
+
+function ItemImageCarousel({ images, name, autoAdvanceMs = 3500 }: ItemImageCarouselProps) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(0);
+  const pausedRef = useRef(false);
+  const multi = images.length > 1;
+
+  const scrollToIndex = (i: number) => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+  };
+
+  // Auto-advance on a timer; pauses while the user is touching/hovering.
+  useEffect(() => {
+    if (!multi) return;
+    const id = window.setInterval(() => {
+      if (pausedRef.current) return;
+      const el = scrollerRef.current;
+      if (!el) return;
+      const next = (Math.round(el.scrollLeft / el.clientWidth) + 1) % images.length;
+      el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
+    }, autoAdvanceMs);
+    return () => window.clearInterval(id);
+  }, [multi, images.length, autoAdvanceMs]);
+
+  const onScroll = () => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const i = Math.round(el.scrollLeft / el.clientWidth);
+    if (i !== active) setActive(i);
+  };
+
+  return (
+    <div
+      className="relative w-full"
+      onMouseEnter={() => (pausedRef.current = true)}
+      onMouseLeave={() => (pausedRef.current = false)}
+      onTouchStart={() => (pausedRef.current = true)}
+      onTouchEnd={() => {
+        // resume shortly after the swipe settles
+        window.setTimeout(() => (pausedRef.current = false), 600);
+      }}
+    >
+      <div
+        ref={scrollerRef}
+        onScroll={onScroll}
+        className="flex aspect-[4/3] w-full snap-x snap-mandatory overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {images.map((src, i) => (
+          <img
+            key={`${src}-${i}`}
+            src={src}
+            alt={images.length > 1 ? `${name} (${i + 1}/${images.length})` : name}
+            loading="lazy"
+            draggable={false}
+            className="h-full w-full shrink-0 snap-center object-cover"
+          />
+        ))}
+      </div>
+      {multi && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 flex items-center justify-center gap-1.5">
+          {images.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`Go to image ${i + 1}`}
+              onClick={() => scrollToIndex(i)}
+              className={`pointer-events-auto h-1.5 rounded-full shadow transition-all duration-200 ${
+                i === active ? "w-4 bg-white" : "w-1.5 bg-white/60"
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ItemCardProps {
   item: PublicMenuItem;
   selectedVariant: Record<string, string>;
@@ -46,7 +131,6 @@ interface ItemCardProps {
   adjust: (id: string, delta: number, variant?: string | null) => void;
   money: (v: number) => string;
   t: (key: string, vars?: Record<string, string | number>) => string;
-  layout: "grid" | "list";
 }
 
 function ItemCard({
@@ -57,7 +141,6 @@ function ItemCard({
   adjust,
   money,
   t,
-  layout,
 }: ItemCardProps) {
   const hasVariants = item.variants && item.variants.length > 0;
   const selVariant = hasVariants ? (selectedVariant[item.id] ?? item.variants[0].name) : null;
@@ -71,166 +154,98 @@ function ItemCard({
   const curKey = cartKey(item.id, selVariant);
   const curQty = cart[curKey] ?? 0;
 
-  if (layout === "list") {
-    return (
-      <article
-        className={`relative flex items-center gap-3 overflow-hidden rounded-2xl bg-white p-2.5 shadow-[0_2px_12px_rgba(120,80,40,0.07)] transition-all duration-200 hover:shadow-[0_6px_24px_rgba(120,80,40,0.15)] ${
-          totalQty > 0 ? "ring-2 ring-amber-600/70" : ""
-        }`}
-      >
-        {item.image_url ? (
-          <img
-            src={item.image_url}
-            alt={item.name}
-            loading="lazy"
-            className="h-20 w-20 shrink-0 rounded-xl object-cover"
-          />
-        ) : (
-          <div
-            aria-hidden
-            className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 text-3xl font-bold text-amber-700 [font-family:var(--font-display)]"
-          >
-            {item.name.charAt(0)}
-          </div>
-        )}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <h3 className="line-clamp-2 text-sm font-bold leading-snug text-stone-900">{item.name}</h3>
-          {item.description && (
-            <p className="mt-0.5 line-clamp-1 text-xs text-stone-500">{item.description}</p>
-          )}
-          <div className="mt-1 flex items-center gap-2">
-            <p className="text-xs font-semibold text-amber-800">{money(displayPrice)}</p>
-            {hasVariants && (
-              <select
-                value={selVariant ?? ""}
-                onChange={(e) =>
-                  setSelectedVariant({ ...selectedVariant, [item.id]: e.target.value })
-                }
-                className="rounded-md border border-stone-200 px-1.5 py-1 text-[11px] focus:border-amber-500 focus:outline-none"
-              >
-                {item.variants.map((v) => (
-                  <option key={v.name} value={v.name}>
-                    {v.name} — {money(v.price)}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        </div>
-        <div className="shrink-0">
-          {curQty === 0 ? (
-            <button
-              onClick={() => adjust(item.id, +1, selVariant)}
-              aria-label={t("add_one", { label: item.name })}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-700 text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-            >
-              <IconPlus />
-            </button>
-          ) : (
-            <div className="flex items-center gap-1 rounded-full bg-amber-50 px-1 py-1">
-              <button
-                onClick={() => adjust(item.id, -1, selVariant)}
-                aria-label={t("remove_one", { label: item.name })}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-amber-800 transition-colors duration-200 hover:bg-amber-100 focus:outline-none"
-              >
-                <IconMinus />
-              </button>
-              <span className="w-4 text-center text-sm font-bold text-stone-900" aria-live="polite">
-                {curQty}
-              </span>
-              <button
-                onClick={() => adjust(item.id, +1, selVariant)}
-                aria-label={t("add_one", { label: item.name })}
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-700 text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none"
-              >
-                <IconPlus />
-              </button>
-            </div>
-          )}
-        </div>
-        {totalQty > 0 && (
-          <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-amber-700 text-[11px] font-bold text-white shadow">
-            {totalQty}
-          </span>
-        )}
-      </article>
-    );
-  }
+  // Build the ordered image gallery: prefer image_urls, fall back to single image_url.
+  const images =
+    item.image_urls && item.image_urls.length > 0
+      ? item.image_urls
+      : item.image_url
+        ? [item.image_url]
+        : [];
 
   return (
     <article
-      className={`relative flex w-40 shrink-0 snap-start flex-col overflow-hidden rounded-2xl bg-white shadow-[0_2px_12px_rgba(120,80,40,0.07)] transition-all duration-200 hover:shadow-[0_6px_24px_rgba(120,80,40,0.15)] ${
+      className={`relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-[0_2px_12px_rgba(120,80,40,0.07)] transition-all duration-200 hover:shadow-[0_6px_24px_rgba(120,80,40,0.15)] ${
         totalQty > 0 ? "ring-2 ring-amber-600/70" : ""
       }`}
     >
-      {item.image_url ? (
-        <img
-          src={item.image_url}
-          alt={item.name}
-          loading="lazy"
-          className="h-36 w-full object-cover"
-        />
+      {/* 1. Image (auto-scrolling carousel when multiple) */}
+      {images.length > 0 ? (
+        <ItemImageCarousel images={images} name={item.name} />
       ) : (
         <div
           aria-hidden
-          className="flex h-36 w-full items-center justify-center bg-gradient-to-br from-amber-100 to-amber-200 text-4xl font-bold text-amber-700 [font-family:var(--font-display)]"
+          className="flex aspect-[4/3] w-full items-center justify-center bg-gradient-to-br from-amber-100 to-amber-200 text-5xl font-bold text-amber-700 [font-family:var(--font-display)]"
         >
           {item.name.charAt(0)}
         </div>
       )}
       {totalQty > 0 && (
-        <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-amber-700 text-[11px] font-bold text-white shadow">
+        <span className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-amber-700 text-xs font-bold text-white shadow">
           {totalQty}
         </span>
       )}
-      <div className="flex flex-1 flex-col p-2.5">
-        <h3 className="line-clamp-2 text-sm font-bold leading-snug text-stone-900">{item.name}</h3>
-        <p className="mt-1 text-xs font-semibold text-amber-800">{money(displayPrice)}</p>
-        {hasVariants && (
-          <select
-            value={selVariant ?? ""}
-            onChange={(e) =>
-              setSelectedVariant({ ...selectedVariant, [item.id]: e.target.value })
-            }
-            className="mt-1 w-full rounded-md border border-stone-200 px-1.5 py-1 text-[11px] focus:border-amber-500 focus:outline-none"
-          >
-            {item.variants.map((v) => (
-              <option key={v.name} value={v.name}>
-                {v.name} — {money(v.price)}
-              </option>
-            ))}
-          </select>
-        )}
-        <div className="mt-auto pt-2">
-          {curQty === 0 ? (
-            <button
-              onClick={() => adjust(item.id, +1, selVariant)}
-              aria-label={t("add_one", { label: item.name })}
-              className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-xl bg-amber-700 py-1.5 text-xs font-bold text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+
+      <div className="flex flex-1 flex-col gap-2 p-3.5">
+        {/* 2. Description */}
+        <div>
+          <h3 className="text-base font-bold leading-snug text-stone-900">{item.name}</h3>
+          {item.description && (
+            <p className="mt-1 text-sm leading-relaxed text-stone-500">{item.description}</p>
+          )}
+        </div>
+
+        {/* 3. Variant + price + add-to-cart */}
+        <div className="mt-auto flex flex-col gap-2 pt-1">
+          {hasVariants && (
+            <select
+              value={selVariant ?? ""}
+              onChange={(e) =>
+                setSelectedVariant({ ...selectedVariant, [item.id]: e.target.value })
+              }
+              className="w-full rounded-lg border border-stone-200 px-2.5 py-2 text-sm focus:border-amber-500 focus:outline-none"
             >
-              <IconPlus /> {t("add")}
-            </button>
-          ) : (
-            <div className="flex items-center justify-between rounded-xl bg-amber-50 px-1 py-1">
-              <button
-                onClick={() => adjust(item.id, -1, selVariant)}
-                aria-label={t("remove_one", { label: item.name })}
-                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-amber-800 transition-colors duration-200 hover:bg-amber-100 focus:outline-none"
-              >
-                <IconMinus />
-              </button>
-              <span className="w-5 text-center text-sm font-bold text-stone-900" aria-live="polite">
-                {curQty}
-              </span>
+              {item.variants.map((v) => (
+                <option key={v.name} value={v.name}>
+                  {v.name} — {money(v.price)}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-lg font-bold text-amber-800">{money(displayPrice)}</p>
+            {curQty === 0 ? (
               <button
                 onClick={() => adjust(item.id, +1, selVariant)}
                 aria-label={t("add_one", { label: item.name })}
-                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-amber-700 text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none"
+                className="flex shrink-0 cursor-pointer items-center justify-center gap-1 rounded-xl bg-amber-700 px-4 py-2 text-sm font-bold text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
               >
-                <IconPlus />
+                <IconPlus /> {t("add")}
               </button>
-            </div>
-          )}
+            ) : (
+              <div className="flex shrink-0 items-center gap-1 rounded-xl bg-amber-50 px-1 py-1">
+                <button
+                  onClick={() => adjust(item.id, -1, selVariant)}
+                  aria-label={t("remove_one", { label: item.name })}
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-amber-800 transition-colors duration-200 hover:bg-amber-100 focus:outline-none"
+                >
+                  <IconMinus />
+                </button>
+                <span
+                  className="w-6 text-center text-sm font-bold text-stone-900"
+                  aria-live="polite"
+                >
+                  {curQty}
+                </span>
+                <button
+                  onClick={() => adjust(item.id, +1, selVariant)}
+                  aria-label={t("add_one", { label: item.name })}
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-amber-700 text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none"
+                >
+                  <IconPlus />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </article>
@@ -871,39 +886,26 @@ export default function PublicOrderPage() {
             <h2 className="mb-3 text-xl font-bold text-stone-900 [font-family:var(--font-display)]">
               {category.name}
             </h2>
-            {layout === "list" ? (
-              <div className="space-y-2.5">
-                {category.items.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    selectedVariant={selectedVariant}
-                    setSelectedVariant={setSelectedVariant}
-                    cart={cart}
-                    adjust={adjust}
-                    money={money}
-                    t={t}
-                    layout="list"
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {category.items.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    selectedVariant={selectedVariant}
-                    setSelectedVariant={setSelectedVariant}
-                    cart={cart}
-                    adjust={adjust}
-                    money={money}
-                    t={t}
-                    layout="grid"
-                  />
-                ))}
-              </div>
-            )}
+            <div
+              className={
+                layout === "list"
+                  ? "flex flex-col gap-4"
+                  : "grid grid-cols-1 gap-4 sm:grid-cols-2"
+              }
+            >
+              {category.items.map((item) => (
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  selectedVariant={selectedVariant}
+                  setSelectedVariant={setSelectedVariant}
+                  cart={cart}
+                  adjust={adjust}
+                  money={money}
+                  t={t}
+                />
+              ))}
+            </div>
           </section>
         ))}
       </div>
