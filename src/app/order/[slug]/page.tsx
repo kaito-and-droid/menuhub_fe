@@ -140,6 +140,11 @@ const IconSparkle = () => (
     <path d="M12 3v3m0 12v3M5.6 5.6l2.2 2.2m8.4 8.4 2.2 2.2M3 12h3m12 0h3M5.6 18.4l2.2-2.2m8.4-8.4 2.2-2.2" />
   </svg>
 );
+const IconMegaphone = () => (
+  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="m3 11 18-5v12L3 13v-2Z" /><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+  </svg>
+);
 
 /* ---------- membership persistence (device-level, per shop) ---------- */
 interface MemberRecord {
@@ -443,6 +448,65 @@ export default function PublicOrderPage() {
           </div>
         </div>
       </header>
+
+      {/* Shop banner (admin-configured) */}
+      {menu.order_page && (menu.order_page.banner_headline || menu.order_page.banner_image_url) && (
+        <section aria-label="Shop banner" className="mx-auto max-w-lg px-4 pt-4">
+          <article className="relative overflow-hidden rounded-2xl shadow-[0_4px_20px_rgba(120,80,40,0.15)]">
+            {menu.order_page.banner_image_url ? (
+              <>
+                <img
+                  src={menu.order_page.banner_image_url}
+                  alt=""
+                  loading="lazy"
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-stone-900/70 to-stone-900/20" />
+              </>
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-amber-700 to-amber-900" />
+            )}
+            <div className="relative p-5 text-white">
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-amber-200">
+                {menu.shop_name}
+              </p>
+              <h3 className="mt-1 text-xl font-bold [font-family:var(--font-display)]">
+                {menu.order_page.banner_headline}
+              </h3>
+              {menu.order_page.banner_subtitle && (
+                <p className="mt-1 text-sm text-white/85">{menu.order_page.banner_subtitle}</p>
+              )}
+            </div>
+          </article>
+        </section>
+      )}
+
+      {/* Announcement bar */}
+      {menu.order_page?.announcement && (
+        <section aria-label="Announcement" className="mx-auto max-w-lg px-4 pt-3">
+          <div
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+              menu.order_page.announcement_style === "warning"
+                ? "bg-amber-100 text-amber-900"
+                : menu.order_page.announcement_style === "info"
+                  ? "bg-blue-50 text-blue-800"
+                  : "bg-green-50 text-green-800"
+            }`}
+          >
+            <IconMegaphone />
+            {menu.order_page.announcement}
+          </div>
+        </section>
+      )}
+
+      {/* Opening hours */}
+      {menu.order_page?.opening_hours && (
+        <section aria-label="Opening hours" className="mx-auto max-w-lg px-4 pt-3">
+          <p className="flex items-center gap-1.5 rounded-xl bg-stone-100 px-4 py-2 text-xs font-medium text-stone-600">
+            <IconClock /> {menu.order_page.opening_hours}
+          </p>
+        </section>
+      )}
 
       {/* Promo carousel */}
       {menu.campaigns.length > 0 && (

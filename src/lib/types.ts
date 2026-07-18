@@ -152,6 +152,20 @@ export interface SeoConfig {
   og_image_url: string | null;
 }
 
+export interface OrderPageConfig {
+  banner_image_url: string | null;
+  banner_headline: string | null;
+  banner_subtitle: string | null;
+  announcement: string | null;
+  announcement_style: "info" | "warning" | "promo";
+  show_address: boolean;
+  show_phone: boolean;
+  opening_hours: string | null;
+  instagram_handle: string | null;
+  tiktok_username: string | null;
+  facebook_page_url: string | null;
+}
+
 export interface PublicMenu {
   shop_name: string;
   facebook_page_id: string | null;
@@ -160,6 +174,7 @@ export interface PublicMenu {
   payment_methods: string[];
   campaigns: PublicCampaign[];
   categories: { name: string; items: PublicMenuItem[] }[];
+  order_page: OrderPageConfig | null;
   seo: SeoConfig | null;
 }
 
