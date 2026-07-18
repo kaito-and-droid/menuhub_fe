@@ -1,13 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { publicApi } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { useOrderI18n } from "@/lib/useOrderI18n";
+import { formatOrderDateTime, formatOrderTime } from "@/lib/order-i18n";
 
 const POLL_MS = 10_000;
+
+/** Statuses where no further updates are expected — stop polling. */
+const TERMINAL_STATUSES = new Set(["completed", "cancelled"]);
 
 interface StatusResponse {
   order_number: string;
@@ -33,12 +38,15 @@ export default function OrderStatusPage() {
   const [order, setOrder] = useState<StatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { locale, t } = useOrderI18n();
+  const statusRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setOrder(
-        await publicApi<StatusResponse>(`/api/public/shops/${slug}/status/${orderId}`),
+      const data = await publicApi<StatusResponse>(
+        `/api/public/shops/${slug}/status/${orderId}`,
       );
+      statusRef.current = data.status;
+      setOrder(data);
       setError(null);
     } catch {
       setError("Order not found");
@@ -47,9 +55,47 @@ export default function OrderStatusPage() {
 
   useEffect(() => {
     void load();
-    const timer = setInterval(() => void load(), POLL_MS);
-    return () => clearInterval(timer);
+
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    function stop() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    }
+    function start() {
+      if (timer || TERMINAL_STATUSES.has(statusRef.current ?? "")) return;
+      timer = setInterval(() => {
+        // Stop once the order reaches a terminal state.
+        if (TERMINAL_STATUSES.has(statusRef.current ?? "")) {
+          stop();
+          return;
+        }
+        void load();
+      }, POLL_MS);
+    }
+
+    function onVisibility() {
+      if (document.hidden) {
+        stop();
+      } else {
+        // Refresh immediately on return, then resume polling.
+        void load();
+        start();
+      }
+    }
+
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [load]);
+
+  const stepLabel = (step: (typeof STEPS)[number]) =>
+    locale === "vi" ? STEP_LABELS[step].vi : STEP_LABELS[step].en;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#faf6f0] p-4">
@@ -60,6 +106,12 @@ export default function OrderStatusPage() {
           <p className="text-center text-stone-500">{t("loading")}</p>
         ) : (
           <>
+            {/* Screen-reader live announcement of the current order status. */}
+            <p aria-live="polite" className="sr-only">
+              {order.status === "cancelled"
+                ? t("order_cancelled")
+                : t("status_now", { status: stepLabel(order.status as (typeof STEPS)[number]) })}
+            </p>
             <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
               {t("order")}
             </p>
@@ -73,10 +125,7 @@ export default function OrderStatusPage() {
               (order.status === "pending" || order.status === "preparing") && (
                 <p className="mt-1 text-center text-sm text-stone-500">
                   {t("ready_around", {
-                    time: new Date(order.estimated_ready_at).toLocaleTimeString("vi-VN", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }),
+                    time: formatOrderTime(order.estimated_ready_at, locale),
                   })}
                 </p>
               )}
@@ -99,9 +148,17 @@ export default function OrderStatusPage() {
             )}
 
             {order.status === "cancelled" ? (
-              <p className="mt-6 rounded-md bg-red-50 p-3 text-center text-sm font-medium text-red-700">
-                {t("order_cancelled")}
-              </p>
+              <div className="mt-6">
+                <p className="rounded-md bg-red-50 p-3 text-center text-sm font-medium text-red-700">
+                  {t("order_cancelled")}
+                </p>
+                <Link
+                  href={`/order/${slug}`}
+                  className="mt-4 block w-full cursor-pointer rounded-xl bg-amber-700 py-3 text-center text-sm font-bold text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+                >
+                  {t("back_to_menu")}
+                </Link>
+              </div>
             ) : (
               <ol className="mt-6 space-y-3">
                 {STEPS.map((step, index) => {
@@ -124,6 +181,7 @@ export default function OrderStatusPage() {
                         )}
                       </span>
                       <span
+                        aria-current={current ? "step" : undefined}
                         className={`text-sm ${
                           current
                             ? "font-semibold text-stone-900"
@@ -132,7 +190,7 @@ export default function OrderStatusPage() {
                               : "text-stone-500"
                         }`}
                       >
-                        {locale === "vi" ? STEP_LABELS[step].vi : STEP_LABELS[step].en}
+                        {stepLabel(step)}
                       </span>
                     </li>
                   );
@@ -141,7 +199,7 @@ export default function OrderStatusPage() {
             )}
             <p className="mt-6 text-center text-xs text-stone-500">
               {t("updates_auto", {
-                time: new Date(order.created_at).toLocaleString("vi-VN"),
+                time: formatOrderDateTime(order.created_at, locale),
               })}
             </p>
           </>

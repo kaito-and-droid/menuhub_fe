@@ -7,6 +7,34 @@ function isOrderLocale(v: string | null | undefined): v is OrderLocale {
   return v === "en" || v === "vi";
 }
 
+/** Maps an app locale to a BCP-47 tag for Intl date/time formatting. */
+const INTL_LOCALES: Record<OrderLocale, string> = {
+  en: "en-SG",
+  vi: "vi-VN",
+};
+
+export function intlLocale(locale: OrderLocale): string {
+  return INTL_LOCALES[locale] ?? "en-SG";
+}
+
+/** Locale-aware short time, e.g. "3:45 PM" / "15:45". */
+export function formatOrderTime(value: string | Date, locale: OrderLocale): string {
+  return new Date(value).toLocaleTimeString(intlLocale(locale), {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** Locale-aware short date. */
+export function formatOrderDate(value: string | Date, locale: OrderLocale): string {
+  return new Date(value).toLocaleDateString(intlLocale(locale));
+}
+
+/** Locale-aware date + time. */
+export function formatOrderDateTime(value: string | Date, locale: OrderLocale): string {
+  return new Date(value).toLocaleString(intlLocale(locale));
+}
+
 export function resolveOrderLocale(search: string): {
   locale: OrderLocale;
   fromQuery: boolean;
@@ -97,6 +125,28 @@ const en: Dict = {
   "menu_layout": "Menu layout",
   "layout_grid": "Grid view",
   "layout_list": "List view",
+  "view_details": "View details for {label}",
+  "close": "Close",
+  "choose_option": "Choose an option",
+  "decrease_qty": "Decrease quantity",
+  "increase_qty": "Increase quantity",
+  "add_to_cart": "Add to cart · {amount}",
+  "update_cart": "Update cart · {amount}",
+  "phone_hint": "We'll use this to update you about your order.",
+  "err_name_required": "Please enter your name.",
+  "err_phone_required": "Please enter your phone number.",
+  "err_phone_invalid": "Please enter a valid phone number.",
+  "err_email_invalid": "Please enter a valid email address.",
+  "err_address_required": "Please enter your delivery address.",
+  "err_postal_required": "Please enter your postal code.",
+  "err_postal_invalid": "Please enter a valid postal code.",
+  "status_now": "Order status: {status}",
+  "load_error_title": "Couldn't load the menu",
+  "load_error_help": "Something went wrong. Please check your connection and try again.",
+  "try_again": "Try again",
+  "menu_empty_title": "Nothing on the menu yet",
+  "menu_empty_help": "This shop hasn't added any items. Please check back soon.",
+  "category_empty": "No items in this category yet.",
 };
 
 const vi: Dict = {
@@ -166,6 +216,28 @@ const vi: Dict = {
   "menu_layout": "Kiểu hiển thị",
   "layout_grid": "Lưới",
   "layout_list": "Danh sách",
+  "view_details": "Xem chi tiết {label}",
+  "close": "Đóng",
+  "choose_option": "Chọn một tùy chọn",
+  "decrease_qty": "Giảm số lượng",
+  "increase_qty": "Tăng số lượng",
+  "add_to_cart": "Thêm vào giỏ · {amount}",
+  "update_cart": "Cập nhật giỏ · {amount}",
+  "phone_hint": "Chúng tôi sẽ dùng số này để cập nhật đơn hàng cho bạn.",
+  "err_name_required": "Vui lòng nhập tên của bạn.",
+  "err_phone_required": "Vui lòng nhập số điện thoại.",
+  "err_phone_invalid": "Vui lòng nhập số điện thoại hợp lệ.",
+  "err_email_invalid": "Vui lòng nhập email hợp lệ.",
+  "err_address_required": "Vui lòng nhập địa chỉ giao hàng.",
+  "err_postal_required": "Vui lòng nhập mã bưu chính.",
+  "err_postal_invalid": "Vui lòng nhập mã bưu chính hợp lệ.",
+  "status_now": "Trạng thái đơn hàng: {status}",
+  "load_error_title": "Không tải được thực đơn",
+  "load_error_help": "Đã có lỗi xảy ra. Vui lòng kiểm tra kết nối và thử lại.",
+  "try_again": "Thử lại",
+  "menu_empty_title": "Chưa có món nào trong thực đơn",
+  "menu_empty_help": "Cửa hàng này chưa thêm món nào. Vui lòng quay lại sau.",
+  "category_empty": "Chưa có món nào trong danh mục này.",
 };
 
 const dicts: Record<OrderLocale, Dict> = { en, vi };
