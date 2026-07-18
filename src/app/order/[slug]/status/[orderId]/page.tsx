@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { publicApi } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
+import { useOrderI18n } from "@/lib/useOrderI18n";
 
 const POLL_MS = 10_000;
 
@@ -20,17 +21,18 @@ interface StatusResponse {
 }
 
 const STEPS = ["pending", "preparing", "ready", "completed"] as const;
-const STEP_LABELS: Record<(typeof STEPS)[number], string> = {
-  pending: "Received",
-  preparing: "Preparing",
-  ready: "Ready for you",
-  completed: "Done",
+const STEP_LABELS: Record<(typeof STEPS)[number], { en: string; vi: string }> = {
+  pending: { en: "Received", vi: "Đã nhận" },
+  preparing: { en: "Preparing", vi: "Đang chuẩn bị" },
+  ready: { en: "Ready for you", vi: "Sẵn sàng" },
+  completed: { en: "Done", vi: "Hoàn tất" },
 };
 
 export default function OrderStatusPage() {
   const { slug, orderId } = useParams<{ slug: string; orderId: string }>();
   const [order, setOrder] = useState<StatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { locale, t } = useOrderI18n();
 
   const load = useCallback(async () => {
     try {
@@ -53,13 +55,13 @@ export default function OrderStatusPage() {
     <main className="flex min-h-screen items-center justify-center bg-[#faf6f0] p-4">
       <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-[0_8px_40px_rgba(120,80,40,0.12)]">
         {error ? (
-          <p className="text-center text-stone-500">{error}</p>
+          <p className="text-center text-stone-500">{t("order_not_found")}</p>
         ) : !order ? (
-          <p className="text-center text-stone-500">Loading…</p>
+          <p className="text-center text-stone-500">{t("loading")}</p>
         ) : (
           <>
             <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
-              Order
+              {t("order")}
             </p>
             <h1 className="text-center text-3xl font-bold text-stone-900 [font-family:var(--font-display)]">
               {order.order_number}
@@ -70,20 +72,19 @@ export default function OrderStatusPage() {
             {order.estimated_ready_at &&
               (order.status === "pending" || order.status === "preparing") && (
                 <p className="mt-1 text-center text-sm text-stone-500">
-                  Ready around{" "}
-                  {new Date(order.estimated_ready_at).toLocaleTimeString("vi-VN", {
-                    hour: "2-digit",
-                    minute: "2-digit",
+                  {t("ready_around", {
+                    time: new Date(order.estimated_ready_at).toLocaleTimeString("vi-VN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }),
                   })}
                 </p>
               )}
 
             {order.paynow_qr && order.status !== "cancelled" && (
               <div className="mt-4 rounded-2xl border-2 border-amber-200 bg-amber-50/60 p-4 text-center">
-                <p className="text-sm font-bold text-stone-900">Awaiting PayNow payment</p>
-                <p className="mt-0.5 text-xs text-stone-500">
-                  Scan with your banking app if you haven&apos;t paid yet.
-                </p>
+                <p className="text-sm font-bold text-stone-900">{t("awaiting_paynow")}</p>
+                <p className="mt-0.5 text-xs text-stone-500">{t("awaiting_paynow_help")}</p>
                 <div className="mx-auto mt-3 w-fit rounded-xl bg-white p-3 shadow-sm">
                   <QRCodeSVG value={order.paynow_qr} size={160} marginSize={1} />
                 </div>
@@ -92,14 +93,14 @@ export default function OrderStatusPage() {
             {order.payment_status === "completed" && order.status !== "cancelled" && (
               <p className="mt-3 text-center">
                 <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-                  Payment received
+                  {t("payment_received")}
                 </span>
               </p>
             )}
 
             {order.status === "cancelled" ? (
               <p className="mt-6 rounded-md bg-red-50 p-3 text-center text-sm font-medium text-red-700">
-                This order was cancelled.
+                {t("order_cancelled")}
               </p>
             ) : (
               <ol className="mt-6 space-y-3">
@@ -131,7 +132,7 @@ export default function OrderStatusPage() {
                               : "text-stone-500"
                         }`}
                       >
-                        {STEP_LABELS[step]}
+                        {locale === "vi" ? STEP_LABELS[step].vi : STEP_LABELS[step].en}
                       </span>
                     </li>
                   );
@@ -139,8 +140,9 @@ export default function OrderStatusPage() {
               </ol>
             )}
             <p className="mt-6 text-center text-xs text-stone-500">
-              Updates automatically · placed{" "}
-              {new Date(order.created_at).toLocaleString("vi-VN")}
+              {t("updates_auto", {
+                time: new Date(order.created_at).toLocaleString("vi-VN"),
+              })}
             </p>
           </>
         )}

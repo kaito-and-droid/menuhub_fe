@@ -10,7 +10,21 @@ import { publicApi } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { PublicCampaign, PublicMenu, PublicMenuItem } from "@/lib/types";
 import GallerySection from "@/components/GallerySection";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { useOrderI18n } from "@/lib/useOrderI18n";
 import { MOCK_MENU, makeMockOrder } from "@/lib/mock-menu";
+
+const PAYMENT_LABELS: Record<string, { en: string; vi: string }> = {
+  cash: { en: "Cash", vi: "Tiền mặt" },
+  bank_transfer: { en: "Bank transfer", vi: "Chuyển khoản" },
+  paynow: { en: "PayNow", vi: "PayNow" },
+};
+
+function paymentLabel(method: string, locale: string): string {
+  const entry = PAYMENT_LABELS[method];
+  if (!entry) return method;
+  return locale === "vi" ? entry.vi : entry.en;
+}
 
 
 /** Composite cart key: itemId or "itemId::variantName" */
@@ -86,12 +100,6 @@ const EMPTY_FORM: CustomerForm = {
   postal_code: "",
   payment_method: "cash",
   notes: "",
-};
-
-const PAYMENT_LABELS: Record<string, string> = {
-  cash: "Cash",
-  bank_transfer: "Bank transfer",
-  paynow: "PayNow",
 };
 
 /* ---------- inline SVG icons (Lucide-style, 24x24) ---------- */
@@ -194,6 +202,7 @@ export default function PublicOrderPage() {
   const [isMember, setIsMember] = useState(false);
   const [returningMember, setReturningMember] = useState<MemberRecord | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const { locale, t, setLocale } = useOrderI18n();
   const money = (v: number) => formatMoney(v, menu?.currency);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
@@ -347,7 +356,7 @@ export default function PublicOrderPage() {
   if (notFound) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#faf6f0]">
-        <p className="text-stone-500">Shop not found.</p>
+        <p className="text-stone-500">{t("shop_not_found")}</p>
       </main>
     );
   }
@@ -374,48 +383,46 @@ export default function PublicOrderPage() {
             <IconCheck />
           </div>
           <h1 className="mt-4 text-2xl font-bold text-stone-900 [font-family:var(--font-display)]">
-            Order placed!
+            {t("order_placed")}
           </h1>
           <p className="mt-2 text-stone-600">
-            <span className="font-semibold text-stone-900">{placed.order_number}</span> at{" "}
-            {menu.shop_name}
+            <span className="font-semibold text-stone-900">{placed.order_number}</span>{" "}
+            {t("at_shop", { shop: menu.shop_name })}
           </p>
           <p className="mt-3 text-3xl font-bold text-amber-800">
             {money(placed.total_amount)}
           </p>
           {placed.discount_amount > 0 && (
             <p className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-sm font-semibold text-green-700">
-              <IconTag /> You saved {money(placed.discount_amount)}
+              <IconTag /> {t("you_saved", { amount: money(placed.discount_amount) })}
               {placed.campaign_title && ` · ${placed.campaign_title}`}
             </p>
           )}
           {placed.estimated_ready_at && (
             <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-3 py-1 text-sm text-stone-600">
               <IconClock />
-              Ready around{" "}
-              {new Date(placed.estimated_ready_at).toLocaleTimeString("vi-VN", {
-                hour: "2-digit",
-                minute: "2-digit",
+              {t("ready_around", {
+                time: new Date(placed.estimated_ready_at).toLocaleTimeString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
               })}
             </p>
           )}
           {isMember && (
             <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
-              <IconSparkle /> Member details saved — next order is one tap away
+              <IconSparkle /> {t("member_saved")}
             </p>
           )}
           {placed.paynow_qr && (
             <div className="mt-5 rounded-2xl border-2 border-amber-200 bg-amber-50/60 p-4">
-              <p className="text-sm font-bold text-stone-900">Pay with PayNow</p>
-              <p className="mt-0.5 text-xs text-stone-500">
-                Scan with any Singapore banking app — the amount and order reference are
-                already filled in. The shop confirms your payment shortly after.
-              </p>
+              <p className="text-sm font-bold text-stone-900">{t("pay_with_paynow")}</p>
+              <p className="mt-0.5 text-xs text-stone-500">{t("paynow_help")}</p>
               <div className="mx-auto mt-3 w-fit rounded-xl bg-white p-3 shadow-sm">
                 <QRCodeSVG value={placed.paynow_qr} size={180} marginSize={1} />
               </div>
               <p className="mt-2 text-xs font-medium text-stone-600">
-                {money(placed.total_amount)} · Ref {placed.order_number}
+                {money(placed.total_amount)} · {t("paynow_ref", { order: placed.order_number })}
               </p>
             </div>
           )}
@@ -423,7 +430,7 @@ export default function PublicOrderPage() {
             href={`/order/${slug}/status/${placed.id}`}
             className="mt-6 block w-full cursor-pointer rounded-xl bg-amber-700 py-3 text-sm font-bold text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
           >
-            Track your order
+            {t("track_order")}
           </Link>
           {menu.facebook_page_id && (
             <a
@@ -432,14 +439,14 @@ export default function PublicOrderPage() {
               rel="noopener noreferrer"
               className="mt-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-stone-200 py-3 text-sm font-semibold text-stone-700 transition-colors duration-200 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
             >
-              <IconMessenger /> Get updates on Messenger
+              <IconMessenger /> {t("get_messenger")}
             </a>
           )}
           <button
             onClick={() => setPlaced(null)}
             className="mt-4 cursor-pointer text-sm font-medium text-amber-700 transition-colors duration-200 hover:text-amber-900"
           >
-            Order something else
+            {t("order_else")}
           </button>
         </div>
       </main>
@@ -468,9 +475,12 @@ export default function PublicOrderPage() {
           <div className="absolute inset-0 bg-gradient-to-b from-amber-900 to-amber-800" />
         )}
         <div className="relative mx-auto max-w-lg">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
-            Order online
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">
+              {t("order_online")}
+            </p>
+            <LanguageSwitcher locale={locale} onSelect={setLocale} className="mt-0.5" />
+          </div>
           <h1 className="mt-1 text-3xl font-bold [font-family:var(--font-display)]">
             {menu.shop_name}
           </h1>
@@ -484,11 +494,11 @@ export default function PublicOrderPage() {
           )}
           <div className="mt-3 flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-medium">
-              <IconClock /> ~{menu.estimated_wait_minutes} min prep
+              <IconClock /> {t("min_prep", { min: menu.estimated_wait_minutes })}
             </span>
             {returningMember && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-3 py-1 text-xs font-medium text-amber-100">
-                <IconSparkle /> Welcome back, {returningMember.name.split(" ")[0]}
+                <IconSparkle /> {t("welcome_back", { name: returningMember.name.split(" ")[0] })}
               </span>
             )}
           </div>
@@ -524,7 +534,7 @@ export default function PublicOrderPage() {
 
       {/* Promo carousel */}
       {menu.campaigns.length > 0 && (
-        <section aria-label="Promotions" className="mx-auto max-w-lg px-4 pt-4">
+        <section aria-label={t("promotions")} className="mx-auto max-w-lg px-4 pt-4">
           <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 [scrollbar-width:none]">
             {menu.campaigns.map((campaign) => (
               <article
@@ -560,7 +570,7 @@ export default function PublicOrderPage() {
                   )}
                   {campaign.ends_at && (
                     <p className="mt-1.5 text-[11px] font-medium uppercase tracking-wide text-white/70">
-                      Until {new Date(campaign.ends_at).toLocaleDateString("vi-VN")}
+                       {t("until", { date: new Date(campaign.ends_at).toLocaleDateString("vi-VN") })}
                     </p>
                   )}
                 </div>
@@ -690,16 +700,16 @@ export default function PublicOrderPage() {
                         {curQty === 0 ? (
                           <button
                             onClick={() => adjust(item.id, +1, selVariant)}
-                            aria-label={`Add ${item.name}`}
+                            aria-label={t("add_one", { label: item.name })}
                             className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-xl bg-amber-700 py-1.5 text-xs font-bold text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                           >
-                            <IconPlus /> Add
+                            <IconPlus /> {t("add")}
                           </button>
                         ) : (
                           <div className="flex items-center justify-between rounded-xl bg-amber-50 px-1 py-1">
                             <button
                               onClick={() => adjust(item.id, -1, selVariant)}
-                              aria-label={`Remove one ${item.name}`}
+                              aria-label={t("remove_one", { label: item.name })}
                               className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-amber-800 transition-colors duration-200 hover:bg-amber-100 focus:outline-none"
                             >
                               <IconMinus />
@@ -709,7 +719,7 @@ export default function PublicOrderPage() {
                             </span>
                             <button
                               onClick={() => adjust(item.id, +1, selVariant)}
-                              aria-label={`Add one ${item.name}`}
+                              aria-label={t("add_one", { label: item.name })}
                               className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-amber-700 text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none"
                             >
                               <IconPlus />
@@ -735,22 +745,24 @@ export default function PublicOrderPage() {
               className="flex w-full cursor-pointer items-center justify-between rounded-2xl bg-amber-700 px-5 py-4 text-white shadow-[0_8px_30px_rgba(120,80,40,0.35)] transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
             >
               <span className="flex items-center gap-2 text-sm font-bold">
-                <IconBag />
-                {cartCount} item{cartCount > 1 ? "s" : ""}
-                {preview.amount > 0 && (
-                  <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold">
-                    −{money(preview.amount)} promo
-                  </span>
-                )}
-              </span>
-              <span className="text-sm font-bold">
-                Checkout · {money(total)}
-              </span>
+                  <IconBag />
+                  {t(cartCount > 1 ? "item_other" : "item_one", { n: cartCount })}
+                  {preview.amount > 0 && (
+                    <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold">
+                      {t("promo_applied", { amount: money(preview.amount) })}
+                    </span>
+                  )}
+                </span>
+                <span className="text-sm font-bold">
+                  {t("checkout")} · {money(total)}
+                </span>
             </button>
             {nudge && (
               <p className="mt-2 rounded-xl bg-white px-3 py-2 text-center text-xs font-medium text-amber-800 shadow-sm">
-                Add {money(nudge.min_order_amount - subtotal)} more for{" "}
-                {nudge.discount_label ?? "a discount"}
+                {t("add_more_nudge", {
+                  amount: money(nudge.min_order_amount - subtotal),
+                  label: nudge.discount_label ?? t("promotion"),
+                })}
               </p>
             )}
           </div>
@@ -769,13 +781,13 @@ export default function PublicOrderPage() {
                 <button
                   type="button"
                   onClick={() => setCheckout(false)}
-                  aria-label="Back to menu"
+                             aria-label={t("back_to_menu")}
                   className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-stone-100 text-stone-600 transition-colors duration-200 hover:bg-stone-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                 >
                   <IconChevronLeft />
                 </button>
-                <h2 className="text-xl font-bold text-stone-900 [font-family:var(--font-display)]">
-                  Your order
+                 <h2 className="text-xl font-bold text-stone-900 [font-family:var(--font-display)]">
+                  {t("your_order")}
                 </h2>
               </div>
             </div>
@@ -798,7 +810,7 @@ export default function PublicOrderPage() {
                               const { itemId: id, variantName: vn } = parseCartKey(key);
                               adjust(id, -1, vn);
                             }}
-                            aria-label={`Remove one ${label}`}
+                            aria-label={t("remove_one", { label })}
                             className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-amber-800 hover:bg-amber-50"
                           >
                             <IconMinus />
@@ -810,7 +822,7 @@ export default function PublicOrderPage() {
                               const { itemId: id, variantName: vn } = parseCartKey(key);
                               adjust(id, +1, vn);
                             }}
-                            aria-label={`Add one ${label}`}
+                            aria-label={t("add_one", { label })}
                             className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-amber-800 hover:bg-amber-50"
                           >
                             <IconPlus />
@@ -827,7 +839,7 @@ export default function PublicOrderPage() {
                 {preview.amount > 0 && (
                   <li className="flex items-center justify-between py-2.5 text-sm font-semibold text-green-700">
                     <span className="flex items-center gap-1.5">
-                      <IconTag /> {preview.campaign?.title ?? "Promotion"}
+                      <IconTag /> {preview.campaign?.title ?? t("promotion")}
                     </span>
                     <span>−{money(preview.amount)}</span>
                   </li>
@@ -836,7 +848,7 @@ export default function PublicOrderPage() {
                 <li className="flex items-center justify-between py-3 font-bold text-stone-900">
                   <span className="flex items-center gap-1.5">
                     <IconBag />
-                    {cartCount} item{cartCount > 1 ? "s" : ""}
+                     {t(cartCount > 1 ? "item_other" : "item_one", { n: cartCount })}
                   </span>
                   <span className="flex items-center gap-2 text-amber-800">
                     {preview.amount > 0 && (
@@ -865,7 +877,7 @@ export default function PublicOrderPage() {
               <div className="mb-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-stone-500">
-                    <IconUser /> Your details
+                    <IconUser /> {t("your_details")}
                   </h3>
                   {returningMember && (
                     <button
@@ -873,12 +885,12 @@ export default function PublicOrderPage() {
                       onClick={forgetMember}
                       className="cursor-pointer text-xs font-medium text-stone-500 transition-colors duration-200 hover:text-red-600"
                     >
-                      Not {returningMember.name.split(" ")[0]}? Clear
+                      {t("not_you_clear", { name: returningMember.name.split(" ")[0] })}
                     </button>
                   )}
                 </div>
                 <div>
-                  <label htmlFor="co-name" className={labelClass}>Name</label>
+                  <label htmlFor="co-name" className={labelClass}>{t("name")}</label>
                   <input
                     id="co-name"
                     required
@@ -889,7 +901,7 @@ export default function PublicOrderPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="co-phone" className={labelClass}>Phone number</label>
+                  <label htmlFor="co-phone" className={labelClass}>{t("phone")}</label>
                   <input
                     id="co-phone"
                     required
@@ -904,7 +916,7 @@ export default function PublicOrderPage() {
                 </div>
                 <div>
                   <label htmlFor="co-email" className={labelClass}>
-                    Email <span className="font-normal text-stone-500">(optional)</span>
+                    {t("email_optional")}
                   </label>
                   <input
                     id="co-email"
@@ -934,42 +946,41 @@ export default function PublicOrderPage() {
                 />
                 <span>
                   <span className="flex items-center gap-1.5 font-bold text-stone-900">
-                    <IconSparkle /> Become a member — it&apos;s free
+                    <IconSparkle /> {t("become_member")}
                   </span>
                   <span className="mt-0.5 block text-xs leading-relaxed text-stone-500">
-                    We&apos;ll remember your details on this device for one-tap checkout, and the
-                    shop can reward you as a returning customer. Untick to order as a guest.
+                    {t("become_member_help")}
                   </span>
                 </span>
               </label>
 
               {/* Delivery */}
               <div className="mb-4">
-                <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-stone-500">
-                  Receive it
-                </h3>
-                <div className="flex gap-2" role="radiogroup" aria-label="Delivery type">
-                  {(["pickup", "delivery"] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      role="radio"
-                      aria-checked={form.delivery_type === mode}
-                      onClick={() => setForm({ ...form, delivery_type: mode })}
-                      className={`flex-1 cursor-pointer rounded-xl border-2 px-3 py-3 text-sm font-bold capitalize transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
-                        form.delivery_type === mode
-                          ? "border-amber-600 bg-amber-50 text-amber-900"
-                          : "border-stone-200 text-stone-500 hover:border-amber-300"
-                      }`}
-                    >
-                      {mode}
-                    </button>
-                  ))}
+                  <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-stone-500">
+                    {t("receive_it")}
+                  </h3>
+                 <div className="flex gap-2" role="radiogroup" aria-label={t("receive_it")}>
+                   {(["pickup", "delivery"] as const).map((mode) => (
+                     <button
+                       key={mode}
+                       type="button"
+                       role="radio"
+                       aria-checked={form.delivery_type === mode}
+                       onClick={() => setForm({ ...form, delivery_type: mode })}
+                       className={`flex-1 cursor-pointer rounded-xl border-2 px-3 py-3 text-sm font-bold capitalize transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+                         form.delivery_type === mode
+                           ? "border-amber-600 bg-amber-50 text-amber-900"
+                           : "border-stone-200 text-stone-500 hover:border-amber-300"
+                       }`}
+                     >
+                       {t(mode)}
+                     </button>
+                   ))}
                 </div>
                 {form.delivery_type === "delivery" && (
                   <div className="mt-3 space-y-3">
                     <div>
-                      <label htmlFor="co-address" className={labelClass}>Delivery address</label>
+                      <label htmlFor="co-address" className={labelClass}>{t("delivery_address")}</label>
                       <input
                         id="co-address"
                         required
@@ -981,10 +992,12 @@ export default function PublicOrderPage() {
                     </div>
                     <div>
                       <label htmlFor="co-postal" className={labelClass}>
-                        Postal code{" "}
-                        <span className="font-normal text-stone-500">
-                          ({menu.currency === "SGD" ? "6 digits" : "5-6 digits"})
-                        </span>
+                        {t("postal_code", {
+                          hint:
+                            menu.currency === "SGD"
+                              ? t("postal_hint_sgd")
+                              : t("postal_hint_other"),
+                        })}
                       </label>
                       <input
                         id="co-postal"
@@ -1004,11 +1017,11 @@ export default function PublicOrderPage() {
 
               {/* Payment */}
               <div className="mb-4">
-                <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-stone-500">
-                  Pay with
-                </h3>
-                <div className="flex gap-2" role="radiogroup" aria-label="Payment method">
-                  {menu.payment_methods.map((method) => (
+                  <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-stone-500">
+                    {t("pay_with")}
+                  </h3>
+                 <div className="flex gap-2" role="radiogroup" aria-label={t("pay_with")}>
+                   {menu.payment_methods.map((method) => (
                     <button
                       key={method}
                       type="button"
@@ -1021,27 +1034,26 @@ export default function PublicOrderPage() {
                           : "border-stone-200 text-stone-500 hover:border-amber-300"
                       }`}
                     >
-                      {PAYMENT_LABELS[method] ?? method}
+                      {paymentLabel(method, locale)}
                     </button>
                   ))}
                 </div>
                 {form.payment_method === "paynow" && (
                   <p className="mt-2 text-xs text-stone-500">
-                    You&apos;ll get a PayNow QR to scan with your banking app after placing the
-                    order.
+                    {t("paynow_after")}
                   </p>
                 )}
               </div>
 
               <div className="mb-5">
                 <label htmlFor="co-notes" className={labelClass}>
-                  Notes <span className="font-normal text-stone-500">(optional)</span>
+                  {t("notes_optional")}
                 </label>
                 <textarea
                   id="co-notes"
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder="e.g. less sugar, call on arrival…"
+                  placeholder={t("notes_placeholder")}
                   className={`${inputClass} h-20 resize-none`}
                 />
               </div>
@@ -1051,7 +1063,7 @@ export default function PublicOrderPage() {
                 disabled={busy}
                 className="w-full cursor-pointer rounded-2xl bg-amber-700 py-4 text-base font-bold text-white shadow-[0_8px_30px_rgba(120,80,40,0.35)] transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
               >
-                {busy ? "Placing your order…" : `Place order · ${money(total)}`}
+                {busy ? t("placing_order") : t("place_order", { amount: money(total) })}
               </button>
             </form>
           </div>
