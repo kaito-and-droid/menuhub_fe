@@ -20,6 +20,7 @@ import {
   OrdersAnalytics,
   RevenueAnalytics,
 } from "@/lib/types";
+import { Badge, Button, Card, CardBody, CardHeader, ErrorBanner, LoadingText } from "@/components/ui";
 
 
 // Validated categorical palette (dataviz reference, fixed slot order):
@@ -104,7 +105,7 @@ export default function AnalyticsPage() {
   }
 
   if (!revenue || !customers || !ingredients || !orderStats) {
-    return <p className="text-sm text-stone-500">{error ?? "Loading analytics…"}</p>;
+    return <LoadingText>{error ?? "Loading analytics…"}</LoadingText>;
   }
 
   const { summary } = revenue;
@@ -133,32 +134,29 @@ export default function AnalyticsPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-stone-900">Analytics</h1>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-stone-900">Analytics</h1>
+          <p className="mt-0.5 text-sm text-stone-500">Sales, costs, and customer insights.</p>
+        </div>
         <div className="flex gap-2">
-          <button
-            onClick={exportRevenue}
-            className="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50"
-          >
+          <Button variant="secondary" onClick={exportRevenue}>
             Export revenue CSV
-          </button>
-          <button
-            onClick={exportOrders}
-            className="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50"
-          >
+          </Button>
+          <Button variant="secondary" onClick={exportOrders}>
             Export orders CSV
-          </button>
+          </Button>
         </div>
       </div>
 
-      {error && <p className="mb-4 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+      {error && <ErrorBanner message={error} />}
 
-      <div className="mb-4 flex gap-1">
+      <div className="mb-6 flex flex-wrap gap-1">
         {PRESETS.map((p) => (
           <button
             key={p.value}
             onClick={() => setPreset(p.value)}
-            className={`rounded-full px-3 py-1 text-sm font-medium ${
+            className={`cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-200 ${
               preset === p.value
                 ? "bg-amber-600 text-white"
                 : "bg-white text-stone-600 hover:bg-stone-50"
@@ -169,268 +167,268 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-5">
         {tiles.map((tile) => (
-          <div key={tile.label} className="rounded-lg bg-white p-4 shadow-sm">
-            <p className="text-xs text-stone-500">{tile.label}</p>
-            <p className="mt-1 text-lg font-semibold text-stone-900">{tile.value}</p>
-          </div>
+          <Card key={tile.label} className="p-4">
+            <p className="text-xs font-medium text-stone-500">{tile.label}</p>
+            <p className="mt-1 text-xl font-semibold tracking-tight text-stone-900">{tile.value}</p>
+          </Card>
         ))}
       </div>
 
-      <section className="mb-6 rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="mb-3 font-semibold text-stone-800">Revenue & profit by day</h2>
-        {byDate.length === 0 ? (
-          <p className="py-8 text-center text-sm text-stone-500">
-            No completed orders in this period.
-          </p>
-        ) : (
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={byDate} barGap={2}>
-              <CartesianGrid vertical={false} stroke={INK.grid} />
-              <XAxis
-                dataKey="label"
-                tickLine={false}
-                axisLine={{ stroke: INK.axis }}
-                tick={{ fill: INK.muted, fontSize: 12 }}
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                tick={{ fill: INK.muted, fontSize: 12 }}
-                tickFormatter={(v: number) => money(v)}
-                width={80}
-              />
-              <Tooltip formatter={tooltipFormatter} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
-              <Legend
-                formatter={(value: string) => (
-                  <span style={{ color: "#52514e", fontSize: 12 }}>{value}</span>
-                )}
-              />
-              <Bar dataKey="revenue" name="Revenue" fill={SERIES.revenue} radius={[4, 4, 0, 0]} maxBarSize={22} />
-              <Bar dataKey="profit" name="Profit" fill={SERIES.profit} radius={[4, 4, 0, 0]} maxBarSize={22} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </section>
-
-      <section className="mb-6 rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="mb-1 font-semibold text-stone-800">Order activity</h2>
-        <p className="mb-3 text-xs text-stone-500">
-          {orderStats.total_orders} orders in this period · cancellation rate{" "}
-          {orderStats.cancellation_rate}
-        </p>
-        <div className="mb-3 flex flex-wrap gap-2">
-          {Object.entries(orderStats.by_status).map(([status, count]) => (
-            <span
-              key={status}
-              className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-700"
-            >
-              {status}: {count}
-            </span>
-          ))}
-          {Object.entries(orderStats.by_source).map(([source, count]) => (
-            <span
-              key={source}
-              className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800"
-            >
-              {source}: {count}
-            </span>
-          ))}
-        </div>
-        {orderStats.total_orders === 0 ? (
-          <p className="py-4 text-center text-sm text-stone-500">No orders in this period.</p>
-        ) : (
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={orderStats.by_hour}>
-              <CartesianGrid vertical={false} stroke={INK.grid} />
-              <XAxis
-                dataKey="hour"
-                tickLine={false}
-                axisLine={{ stroke: INK.axis }}
-                tick={{ fill: INK.muted, fontSize: 11 }}
-                interval={2}
-                tickFormatter={(h: number) => `${h}h`}
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                tick={{ fill: INK.muted, fontSize: 11 }}
-                allowDecimals={false}
-                width={30}
-              />
-              <Tooltip
-                formatter={(value: unknown) => [String(value ?? 0), "Orders"]}
-                labelFormatter={(h) => `${h}:00–${h}:59`}
-                cursor={{ fill: "rgba(0,0,0,0.04)" }}
-              />
-              <Bar dataKey="orders" name="Orders" fill={SERIES.revenue} radius={[4, 4, 0, 0]} maxBarSize={14} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </section>
-
-      <div className="mb-6 grid gap-6 lg:grid-cols-2">
-        <section className="rounded-lg bg-white p-4 shadow-sm">
-          <h2 className="mb-3 font-semibold text-stone-800">Revenue by category</h2>
-          {revenue.by_category.length === 0 ? (
-            <p className="py-8 text-center text-sm text-stone-500">No data yet.</p>
+      <Card className="mb-6">
+        <CardHeader title="Revenue & profit by day" />
+        <CardBody>
+          {byDate.length === 0 ? (
+            <p className="py-8 text-center text-sm text-stone-500">
+              No completed orders in this period.
+            </p>
           ) : (
-            <ResponsiveContainer width="100%" height={Math.max(120, revenue.by_category.length * 44)}>
-              <BarChart data={revenue.by_category} layout="vertical">
-                <CartesianGrid horizontal={false} stroke={INK.grid} />
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={byDate} barGap={2}>
+                <CartesianGrid vertical={false} stroke={INK.grid} />
                 <XAxis
-                  type="number"
+                  dataKey="label"
                   tickLine={false}
                   axisLine={{ stroke: INK.axis }}
                   tick={{ fill: INK.muted, fontSize: 12 }}
-                  tickFormatter={(v: number) => money(v)}
                 />
                 <YAxis
-                  type="category"
-                  dataKey="category"
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "#52514e", fontSize: 12 }}
-                  width={110}
+                  tick={{ fill: INK.muted, fontSize: 12 }}
+                  tickFormatter={(v: number) => money(v)}
+                  width={80}
                 />
                 <Tooltip formatter={tooltipFormatter} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
-                <Bar dataKey="revenue" name="Revenue" fill={SERIES.revenue} radius={[0, 4, 4, 0]} maxBarSize={18} />
+                <Legend
+                  formatter={(value: string) => (
+                    <span style={{ color: "#52514e", fontSize: 12 }}>{value}</span>
+                  )}
+                />
+                <Bar dataKey="revenue" name="Revenue" fill={SERIES.revenue} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                <Bar dataKey="profit" name="Profit" fill={SERIES.profit} radius={[4, 4, 0, 0]} maxBarSize={22} />
               </BarChart>
             </ResponsiveContainer>
           )}
-          <ul className="mt-2 space-y-1">
-            {revenue.by_category.map((row) => (
-              <li key={row.category} className="flex justify-between text-xs text-stone-500">
-                <span>{row.category}</span>
-                <span>margin {row.profit_margin ?? "—"}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        </CardBody>
+      </Card>
 
-        <section className="rounded-lg bg-white p-4 shadow-sm">
-          <h2 className="mb-3 font-semibold text-stone-800">Payment methods</h2>
-          {payments.length === 0 ? (
-            <p className="py-8 text-center text-sm text-stone-500">No data yet.</p>
+      <Card className="mb-6">
+        <CardHeader title="Order activity" description={`${orderStats.total_orders} orders in this period · cancellation rate ${orderStats.cancellation_rate}`} />
+        <CardBody>
+          <div className="mb-4 flex flex-wrap gap-2">
+            {Object.entries(orderStats.by_status).map(([status, count]) => (
+              <Badge key={status} tone="neutral">
+                {status}: {count}
+              </Badge>
+            ))}
+            {Object.entries(orderStats.by_source).map(([source, count]) => (
+              <Badge key={source} tone="amber">
+                {source}: {count}
+              </Badge>
+            ))}
+          </div>
+          {orderStats.total_orders === 0 ? (
+            <p className="py-4 text-center text-sm text-stone-500">No orders in this period.</p>
           ) : (
-            <ul className="space-y-3">
-              {payments.map((payment) => (
-                <li key={payment.method}>
-                  <div className="mb-1 flex justify-between text-sm">
-                    <span className="flex items-center gap-2 text-stone-700">
-                      <span
-                        className="inline-block h-2.5 w-2.5 rounded-full"
-                        style={{ background: payment.color }}
-                      />
-                      {payment.label}
-                    </span>
-                    <span className="font-medium text-stone-900">
-                      {money(payment.amount)}
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-stone-100">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${paymentTotal ? (payment.amount / paymentTotal) * 100 : 0}%`,
-                        background: payment.color,
-                      }}
-                    />
-                  </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={orderStats.by_hour}>
+                <CartesianGrid vertical={false} stroke={INK.grid} />
+                <XAxis
+                  dataKey="hour"
+                  tickLine={false}
+                  axisLine={{ stroke: INK.axis }}
+                  tick={{ fill: INK.muted, fontSize: 11 }}
+                  interval={2}
+                  tickFormatter={(h: number) => `${h}h`}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fill: INK.muted, fontSize: 11 }}
+                  allowDecimals={false}
+                  width={30}
+                />
+                <Tooltip
+                  formatter={(value: unknown) => [String(value ?? 0), "Orders"]}
+                  labelFormatter={(h) => `${h}:00–${h}:59`}
+                  cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                />
+                <Bar dataKey="orders" name="Orders" fill={SERIES.revenue} radius={[4, 4, 0, 0]} maxBarSize={14} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardBody>
+      </Card>
+
+      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader title="Revenue by category" />
+          <CardBody>
+            {revenue.by_category.length === 0 ? (
+              <p className="py-8 text-center text-sm text-stone-500">No data yet.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(120, revenue.by_category.length * 44)}>
+                <BarChart data={revenue.by_category} layout="vertical">
+                  <CartesianGrid horizontal={false} stroke={INK.grid} />
+                  <XAxis
+                    type="number"
+                    tickLine={false}
+                    axisLine={{ stroke: INK.axis }}
+                    tick={{ fill: INK.muted, fontSize: 12 }}
+                    tickFormatter={(v: number) => money(v)}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="category"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: "#52514e", fontSize: 12 }}
+                    width={110}
+                  />
+                  <Tooltip formatter={tooltipFormatter} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
+                  <Bar dataKey="revenue" name="Revenue" fill={SERIES.revenue} radius={[0, 4, 4, 0]} maxBarSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+            <ul className="mt-2 space-y-1">
+              {revenue.by_category.map((row) => (
+                <li key={row.category} className="flex justify-between text-xs text-stone-500">
+                  <span>{row.category}</span>
+                  <span>margin {row.profit_margin ?? "—"}</span>
                 </li>
               ))}
             </ul>
-          )}
+          </CardBody>
+        </Card>
 
-          <h2 className="mt-6 mb-2 font-semibold text-stone-800">Ingredient spend</h2>
-          {ingredients.cogs_summary.by_ingredient.length === 0 ? (
-            <p className="text-sm text-stone-500">No purchases logged in this period.</p>
-          ) : (
-            <ul className="space-y-1 text-sm">
-              {ingredients.cogs_summary.by_ingredient.map((row) => (
-                <li key={row.name} className="flex justify-between">
-                  <span className="text-stone-600">{row.name}</span>
-                  <span className="font-medium text-stone-900">
-                    {money(row.total_spent)}
+        <Card>
+          <CardHeader title="Payment methods" />
+          <CardBody>
+            {payments.length === 0 ? (
+              <p className="py-8 text-center text-sm text-stone-500">No data yet.</p>
+            ) : (
+              <ul className="space-y-3">
+                {payments.map((payment) => (
+                  <li key={payment.method}>
+                    <div className="mb-1 flex justify-between text-sm">
+                      <span className="flex items-center gap-2 text-stone-700">
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-full"
+                          style={{ background: payment.color }}
+                        />
+                        {payment.label}
+                      </span>
+                      <span className="font-medium text-stone-900">
+                        {money(payment.amount)}
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-stone-100">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${paymentTotal ? (payment.amount / paymentTotal) * 100 : 0}%`,
+                          background: payment.color,
+                        }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <h2 className="mb-2 mt-6 font-semibold text-stone-800">Ingredient spend</h2>
+            {ingredients.cogs_summary.by_ingredient.length === 0 ? (
+              <p className="text-sm text-stone-500">No purchases logged in this period.</p>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {ingredients.cogs_summary.by_ingredient.map((row) => (
+                  <li key={row.name} className="flex justify-between">
+                    <span className="text-stone-600">{row.name}</span>
+                    <span className="font-medium text-stone-900">
+                      {money(row.total_spent)}
+                    </span>
+                  </li>
+                ))}
+                <li className="flex justify-between border-t border-stone-200 pt-1">
+                  <span className="text-stone-500">Total</span>
+                  <span className="font-semibold text-stone-900">
+                    {money(ingredients.cogs_summary.total_spent)}
                   </span>
                 </li>
-              ))}
-              <li className="flex justify-between border-t border-stone-200 pt-1">
-                <span className="text-stone-500">Total</span>
-                <span className="font-semibold text-stone-900">
-                  {money(ingredients.cogs_summary.total_spent)}
-                </span>
-              </li>
-            </ul>
-          )}
-        </section>
+              </ul>
+            )}
+          </CardBody>
+        </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-lg bg-white p-4 shadow-sm">
-          <h2 className="mb-3 font-semibold text-stone-800">
-            Top customers
-            <span className="ml-2 text-xs font-normal text-stone-500">
-              {customers.new_customers} new · repeat rate {customers.repeat_rate}
-            </span>
-          </h2>
-          {customers.top_spenders.length === 0 ? (
-            <p className="py-4 text-center text-sm text-stone-500">No customers yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-stone-500">
-                  <th className="py-1 font-medium">Customer</th>
-                  <th className="py-1 text-right font-medium">Orders</th>
-                  <th className="py-1 text-right font-medium">Lifetime</th>
-                </tr>
-              </thead>
-              <tbody>
-                {customers.top_spenders.map((spender) => (
-                  <tr key={spender.customer_id} className="border-t border-stone-100">
-                    <td className="py-1.5 text-stone-800">{spender.name}</td>
-                    <td className="py-1.5 text-right">{spender.order_count}</td>
-                    <td className="py-1.5 text-right font-medium">
-                      {money(spender.lifetime_value)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            </div>
-          )}
-        </section>
+        <Card>
+          <CardHeader
+            title="Top customers"
+            description={`${customers.new_customers} new · repeat rate ${customers.repeat_rate}`}
+          />
+          <CardBody>
+            {customers.top_spenders.length === 0 ? (
+              <p className="py-4 text-center text-sm text-stone-500">No customers yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-stone-500">
+                      <th className="py-1 font-medium">Customer</th>
+                      <th className="py-1 text-right font-medium">Orders</th>
+                      <th className="py-1 text-right font-medium">Lifetime</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customers.top_spenders.map((spender) => (
+                      <tr key={spender.customer_id} className="border-t border-stone-100">
+                        <td className="py-1.5 text-stone-800">{spender.name}</td>
+                        <td className="py-1.5 text-right">{spender.order_count}</td>
+                        <td className="py-1.5 text-right font-medium">
+                          {money(spender.lifetime_value)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardBody>
+        </Card>
 
-        <section className="rounded-lg bg-white p-4 shadow-sm">
-          <h2 className="mb-3 font-semibold text-stone-800">Low stock</h2>
-          {ingredients.low_stock_alerts.length === 0 ? (
-            <p className="py-4 text-center text-sm text-stone-500">
-              All ingredients above their reorder levels. 👍
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {ingredients.low_stock_alerts.map((alert) => (
-                <li
-                  key={alert.id}
-                  className="flex items-center justify-between rounded-md bg-red-50 px-3 py-2 text-sm"
-                >
-                  <span className="font-medium text-red-800">⚠️ {alert.name}</span>
-                  <span className="text-red-700">
-                    {alert.current} / reorder at {alert.reorder_level} {alert.unit}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <Link
-            href="/inventory"
-            className="mt-3 inline-block text-xs font-medium text-amber-700 hover:underline"
-          >
-            Manage inventory →
-          </Link>
-        </section>
+        <Card>
+          <CardHeader title="Low stock" />
+          <CardBody>
+            {ingredients.low_stock_alerts.length === 0 ? (
+              <p className="py-4 text-center text-sm text-stone-500">
+                All ingredients above their reorder levels.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {ingredients.low_stock_alerts.map((alert) => (
+                  <li
+                    key={alert.id}
+                    className="flex items-center justify-between rounded-lg bg-red-50 px-3 py-2 text-sm"
+                  >
+                    <span className="font-medium text-red-800">{alert.name}</span>
+                    <span className="text-red-700">
+                      {alert.current} / reorder at {alert.reorder_level} {alert.unit}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Link
+              href="/inventory"
+              className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-amber-700 transition-colors duration-200 hover:text-amber-800"
+            >
+              Manage inventory →
+            </Link>
+          </CardBody>
+        </Card>
       </div>
     </div>
   );

@@ -45,19 +45,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const nav = (
     <nav className="flex-1 space-y-1 p-3">
-      {NAV_LINKS.map((link) => (
-        <Link
-          key={link.href}
-          href={link.href}
-          className={`block rounded-md px-3 py-2 text-sm font-medium ${
-            pathname.startsWith(link.href)
-              ? "bg-amber-50 text-amber-800"
-              : "text-stone-600 hover:bg-stone-100"
-          }`}
-        >
-          {link.label}
-        </Link>
-      ))}
+      {NAV_LINKS.map((link) => {
+        const active = pathname.startsWith(link.href);
+        return (
+          <Link
+            key={link.href}
+            href={link.href}
+            aria-current={active ? "page" : undefined}
+            className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-200 ${
+              active
+                ? "bg-amber-50 text-amber-800"
+                : "text-stone-600 hover:bg-stone-100"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${active ? "bg-amber-600" : "bg-stone-300"}`}
+              aria-hidden="true"
+            />
+            {link.label}
+          </Link>
+        );
+      })}
     </nav>
   );
 
@@ -65,9 +73,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen flex-col bg-stone-100 md:flex-row">
       {/* Mobile top bar */}
       <header className="flex items-center justify-between border-b border-stone-200 bg-white px-4 py-3 md:hidden">
-        <div>
-          <p className="font-bold text-stone-900">MenuHub</p>
-          <p className="truncate text-xs text-stone-500">{session.shop_slug}</p>
+        <div className="flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-600 text-sm font-bold text-white">
+            M
+          </span>
+          <div>
+            <p className="font-bold leading-tight text-stone-900">MenuHub</p>
+            <p className="truncate text-xs text-stone-500">{session.shop_slug}</p>
+          </div>
         </div>
         <button
           onClick={() => setDrawerOpen(true)}
@@ -88,7 +101,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="absolute inset-0 bg-black/40" onClick={() => setDrawerOpen(false)} />
           <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-stone-200 p-4">
-              <p className="text-lg font-bold text-stone-900">MenuHub</p>
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-600 text-sm font-bold text-white">
+                  M
+                </span>
+                <p className="text-lg font-bold tracking-tight text-stone-900">MenuHub</p>
+              </div>
               <button
                 onClick={() => setDrawerOpen(false)}
                 aria-label="Close menu"
@@ -117,8 +135,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Desktop sidebar */}
       <aside className="hidden w-56 flex-col border-r border-stone-200 bg-white md:flex">
         <div className="border-b border-stone-200 p-4">
-          <p className="text-lg font-bold text-stone-900">MenuHub</p>
-          <p className="truncate text-xs text-stone-500">{session.shop_slug}</p>
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-600 text-sm font-bold text-white">
+              M
+            </span>
+            <p className="text-lg font-bold tracking-tight text-stone-900">MenuHub</p>
+          </div>
+          <p className="mt-1 truncate text-xs text-stone-500">{session.shop_slug}</p>
         </div>
         {nav}
         <div className="border-t border-stone-200 p-3">
