@@ -134,6 +134,25 @@ export default function SettingsPage() {
     try {
       const data = await api<ShopSettings>(base, { method: "PATCH", body });
       setSettings(data);
+      setSeo({
+        title_template: data.seo.title_template ?? "",
+        description: data.seo.description ?? "",
+        keywords: data.seo.keywords ?? "",
+        og_image_url: data.seo.og_image_url ?? "",
+      });
+      setOrderPage({
+        banner_image_url: data.order_page.banner_image_url ?? "",
+        banner_headline: data.order_page.banner_headline ?? "",
+        banner_subtitle: data.order_page.banner_subtitle ?? "",
+        announcement: data.order_page.announcement ?? "",
+        announcement_style: data.order_page.announcement_style,
+        show_address: data.order_page.show_address,
+        show_phone: data.order_page.show_phone,
+        opening_hours: data.order_page.opening_hours ?? "",
+        instagram_handle: data.order_page.instagram_handle ?? "",
+        tiktok_username: data.order_page.tiktok_username ?? "",
+        facebook_page_url: data.order_page.facebook_page_url ?? "",
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
