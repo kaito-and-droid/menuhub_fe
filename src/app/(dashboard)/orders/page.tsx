@@ -220,6 +220,9 @@ export default function OrdersPage() {
                     {order.items.map((item, idx) => (
                       <li key={idx}>
                         {item.quantity}× {item.name}
+                        {item.variant_name && (
+                          <span className="text-xs text-amber-700"> ({item.variant_name})</span>
+                        )}
                         {item.notes && (
                           <span className="text-xs text-stone-500"> — {item.notes}</span>
                         )}

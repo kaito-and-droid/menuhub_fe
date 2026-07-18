@@ -12,6 +12,12 @@ interface RecipeRow {
   quantity: string;
 }
 
+interface VariantRow {
+  name: string;
+  price: string;
+  cost: string;
+}
+
 interface ItemForm {
   id: string | null;
   name: string;
@@ -22,6 +28,7 @@ interface ItemForm {
   category_id: string;
   is_available: boolean;
   recipe: RecipeRow[];
+  variants: VariantRow[];
 }
 
 const emptyForm: ItemForm = {
@@ -34,6 +41,7 @@ const emptyForm: ItemForm = {
   category_id: "",
   is_available: true,
   recipe: [],
+  variants: [],
 };
 
 export default function MenuPage() {
@@ -122,6 +130,11 @@ export default function MenuPage() {
         ingredient_id: line.ingredient_id,
         quantity: String(line.quantity),
       })),
+      variants: item.variants.map((v) => ({
+        name: v.name,
+        price: String(v.price),
+        cost: v.cost != null ? String(v.cost) : "",
+      })),
     });
   }
 
@@ -129,6 +142,13 @@ export default function MenuPage() {
     e.preventDefault();
     if (!form) return;
     const unitOf = (id: string) => ingredients.find((i) => i.id === id)?.unit ?? "g";
+    const variants = form.variants
+      .filter((v) => v.name.trim() && Number(v.price) > 0)
+      .map((v) => ({
+        name: v.name.trim(),
+        price: Number(v.price),
+        cost: v.cost === "" ? null : Number(v.cost),
+      }));
     const body = {
       name: form.name.trim(),
       description: form.description.trim() || null,
@@ -144,6 +164,7 @@ export default function MenuPage() {
           quantity: Number(row.quantity),
           unit: unitOf(row.ingredient_id),
         })),
+      variants: variants.length > 0 ? variants : [],
     };
     void run(async () => {
       if (form.id) {
@@ -243,6 +264,11 @@ export default function MenuPage() {
                         <p className="text-xs text-stone-500">
                           recipe: {item.ingredients.length} ingredient
                           {item.ingredients.length > 1 ? "s" : ""}
+                        </p>
+                      )}
+                      {item.variants.length > 0 && (
+                        <p className="text-xs text-amber-700">
+                          variants: {item.variants.map((v) => `${v.name} (${money(v.price)})`).join(", ")}
                         </p>
                       )}
                     </td>
@@ -347,6 +373,82 @@ export default function MenuPage() {
                 />
               </div>
             </div>
+            {/* Variants */}
+            <div className="mb-3">
+              <div className="mb-1 flex items-center justify-between">
+                <label className="block text-sm font-medium text-stone-700">
+                  Variants <span className="font-normal text-stone-500">(optional — for multi-price items)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setForm({
+                      ...form,
+                      variants: [...form.variants, { name: "", price: "", cost: "" }],
+                    })
+                  }
+                  className="text-xs font-medium text-amber-700 hover:underline"
+                >
+                  + Add variant
+                </button>
+              </div>
+              {form.variants.map((row, index) => (
+                <div key={index} className="mb-2 flex items-center gap-2">
+                  <input
+                    placeholder="Name (e.g. Packet 5pcs)"
+                    value={row.name}
+                    onChange={(e) => {
+                      const variants = [...form.variants];
+                      variants[index] = { ...row, name: e.target.value };
+                      setForm({ ...form, variants });
+                    }}
+                    className="flex-1 rounded-md border border-stone-300 px-2 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    required
+                    placeholder="Price"
+                    value={row.price}
+                    onChange={(e) => {
+                      const variants = [...form.variants];
+                      variants[index] = { ...row, price: e.target.value };
+                      setForm({ ...form, variants });
+                    }}
+                    className="w-24 rounded-md border border-stone-300 px-2 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    placeholder="Cost"
+                    value={row.cost}
+                    onChange={(e) => {
+                      const variants = [...form.variants];
+                      variants[index] = { ...row, cost: e.target.value };
+                      setForm({ ...form, variants });
+                    }}
+                    className="w-24 rounded-md border border-stone-300 px-2 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm({ ...form, variants: form.variants.filter((_, i) => i !== index) })
+                    }
+                    className="text-xs text-stone-500 hover:text-red-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {form.variants.length === 0 && (
+                <p className="rounded-md bg-stone-50 p-2 text-xs text-stone-500">
+                  No variants — item has a single price. Add variants for packet sizes, portion options, etc.
+                </p>
+              )}
+            </div>
+
             <label className="mb-1 block text-sm font-medium text-stone-700">Image URL</label>
             <input
               value={form.image_url}

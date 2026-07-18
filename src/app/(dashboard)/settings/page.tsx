@@ -3,6 +3,13 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { API_URL, api, getSession } from "@/lib/api";
 
+interface SeoConfig {
+  title_template: string | null;
+  description: string | null;
+  keywords: string | null;
+  og_image_url: string | null;
+}
+
 interface ShopSettings {
   shop_name: string;
   slug: string;
@@ -17,6 +24,7 @@ interface ShopSettings {
   paynow_proxy_value: string | null;
   facebook_page_id: string | null;
   facebook_connected: boolean;
+  seo: SeoConfig;
 }
 
 const inputClass =
@@ -39,6 +47,12 @@ export default function SettingsPage() {
   });
   const [fb, setFb] = useState({ page_id: "", token: "" });
   const [paynow, setPaynow] = useState({ proxy_type: "UEN", proxy_value: "" });
+  const [seo, setSeo] = useState<SeoConfig>({
+    title_template: "",
+    description: "",
+    keywords: "",
+    og_image_url: "",
+  });
   const [copied, setCopied] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -56,6 +70,12 @@ export default function SettingsPage() {
       setPaynow({
         proxy_type: data.paynow_proxy_type ?? "UEN",
         proxy_value: data.paynow_proxy_value ?? "",
+      });
+      setSeo({
+        title_template: data.seo.title_template ?? "",
+        description: data.seo.description ?? "",
+        keywords: data.seo.keywords ?? "",
+        og_image_url: data.seo.og_image_url ?? "",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load settings");
@@ -351,6 +371,72 @@ export default function SettingsPage() {
           </p>
         </div>
       </form>
+
+      <section className="mb-6 rounded-lg bg-white p-5 shadow-sm">
+        <h2 className="mb-3 font-semibold text-stone-800">SEO & search visibility</h2>
+        <p className="mb-3 text-xs text-stone-500">
+          Customise how your order page appears in search results and social shares.
+        </p>
+        <div className="mb-3 grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-stone-700">
+              Page title template{" "}
+              <span className="font-normal text-stone-500">(use {"{shop_name}"} as placeholder)</span>
+            </label>
+            <input
+              value={seo.title_template ?? ''}
+              onChange={(e) => setSeo({ ...seo, title_template: e.target.value })}
+              placeholder='e.g. {shop_name} — Order Online'
+              className={inputClass}
+            />
+          </div>
+        </div>
+        <label className="mb-1 block text-sm font-medium text-stone-700">Meta description</label>
+        <textarea
+          value={seo.description ?? ''}
+          onChange={(e) => setSeo({ ...seo, description: e.target.value })}
+          placeholder="A short description for search engine results…"
+          rows={3}
+          className={`${inputClass} mb-3 resize-none`}
+        />
+        <label className="mb-1 block text-sm font-medium text-stone-700">
+          Keywords{" "}
+          <span className="font-normal text-stone-500">(comma-separated)</span>
+        </label>
+        <input
+          value={seo.keywords ?? ''}
+          onChange={(e) => setSeo({ ...seo, keywords: e.target.value })}
+          placeholder="e.g. pho, vietnamese food, order online"
+          className={`${inputClass} mb-3`}
+        />
+        <label className="mb-1 block text-sm font-medium text-stone-700">
+          OG image URL{" "}
+          <span className="font-normal text-stone-500">(shown when shared on social media)</span>
+        </label>
+        <input
+          value={seo.og_image_url ?? ''}
+          onChange={(e) => setSeo({ ...seo, og_image_url: e.target.value })}
+          placeholder="https://…"
+          className={`${inputClass} mb-4`}
+        />
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            void save({
+              seo: {
+                title_template: seo.title_template?.trim() || null,
+                description: seo.description?.trim() || null,
+                keywords: seo.keywords?.trim() || null,
+                og_image_url: seo.og_image_url?.trim() || null,
+              },
+            })
+          }
+          className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+        >
+          Save SEO settings
+        </button>
+      </section>
 
       <section className="rounded-lg bg-white p-5 shadow-sm">
         <h2 className="mb-1 font-semibold text-stone-800">Order page & embed</h2>
