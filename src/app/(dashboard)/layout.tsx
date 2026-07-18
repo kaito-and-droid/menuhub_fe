@@ -72,9 +72,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <button
           onClick={() => setDrawerOpen(true)}
           aria-label="Open menu"
-          className="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700"
+          className="rounded-md border border-stone-300 px-3 py-1.5 text-stone-700"
         >
-          ☰
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="18" x2="20" y2="18" />
+          </svg>
         </button>
       </header>
 
@@ -90,7 +94,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 aria-label="Close menu"
                 className="text-stone-500"
               >
-                ✕
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                </svg>
               </button>
             </div>
             {nav}
