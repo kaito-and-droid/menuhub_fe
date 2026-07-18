@@ -4,13 +4,13 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, getSession } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { Campaign, DiscountType } from "@/lib/types";
+import { Badge, Button, Card, EmptyState, ErrorBanner, Field, Label, LoadingText, Modal, inputClass } from "@/components/ui";
 
-
-const STATUS_STYLE: Record<Campaign["status"], string> = {
-  running: "bg-green-100 text-green-800",
-  scheduled: "bg-blue-100 text-blue-800",
-  expired: "bg-stone-200 text-stone-500",
-  disabled: "bg-stone-200 text-stone-500",
+const STATUS_TONE: Record<Campaign["status"], Parameters<typeof Badge>[0]["tone"]> = {
+  running: "green",
+  scheduled: "blue",
+  expired: "neutral",
+  disabled: "neutral",
 };
 
 interface CampaignForm {
@@ -144,59 +144,54 @@ export default function CampaignsPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-stone-900">Campaigns</h1>
-        <button
-          onClick={() => setForm(emptyForm())}
-          className="cursor-pointer rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
-        >
-          + New campaign
-        </button>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-stone-900">Campaigns</h1>
+          <p className="mt-0.5 text-sm text-stone-500">Promotions shown on your order page, with auto-applied discounts.</p>
+        </div>
+        <Button onClick={() => setForm(emptyForm())}>+ New campaign</Button>
       </div>
-      {error && <p className="mb-4 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+      {error && <ErrorBanner message={error} />}
 
       {campaigns === null ? (
-        <p className="text-sm text-stone-500">Loading campaigns…</p>
+        <LoadingText>Loading campaigns…</LoadingText>
       ) : campaigns.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-stone-300 bg-white p-8 text-center text-sm text-stone-500">
+        <EmptyState>
           No campaigns yet. Promotions appear as banners on your order page, and discounts
           apply automatically at checkout.
-        </p>
+        </EmptyState>
       ) : (
         <div className="space-y-3">
           {campaigns.map((campaign) => (
-            <div key={campaign.id} className="rounded-lg bg-white p-4 shadow-sm">
+            <Card key={campaign.id} className="p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-stone-900">{campaign.title}</span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[campaign.status]}`}
-                  >
-                    {campaign.status}
-                  </span>
+                  <Badge tone={STATUS_TONE[campaign.status]}>{campaign.status}</Badge>
                   {campaign.discount_label && (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                      {campaign.discount_label}
-                    </span>
+                    <Badge tone="amber">{campaign.discount_label}</Badge>
                   )}
                 </div>
                 <div className="flex gap-3 text-xs font-medium">
                   <button
+                    type="button"
                     onClick={() => toggleActive(campaign)}
                     disabled={busy}
-                    className="cursor-pointer text-amber-700 hover:underline"
+                    className="cursor-pointer text-amber-700 transition-colors duration-200 hover:text-amber-800 disabled:opacity-50"
                   >
                     {campaign.is_active ? "Disable" : "Enable"}
                   </button>
                   <button
+                    type="button"
                     onClick={() => openEdit(campaign)}
-                    className="cursor-pointer text-amber-700 hover:underline"
+                    className="cursor-pointer text-amber-700 transition-colors duration-200 hover:text-amber-800"
                   >
                     Edit
                   </button>
                   <button
+                    type="button"
                     onClick={() => remove(campaign)}
-                    className="cursor-pointer text-stone-500 hover:text-red-600"
+                    className="cursor-pointer text-stone-500 transition-colors duration-200 hover:text-red-600"
                   >
                     Delete
                   </button>
@@ -213,42 +208,42 @@ export default function CampaignsPage() {
                 {campaign.min_order_amount > 0 &&
                   ` · min order ${money(campaign.min_order_amount)}`}
               </p>
-            </div>
+            </Card>
           ))}
         </div>
       )}
 
       {form && (
-        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-          <form
-            onSubmit={submit}
-            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-lg"
-          >
-            <h2 className="mb-4 text-lg font-semibold text-stone-900">
+        <Modal onClose={() => setForm(null)} labelledBy="campaign-modal-title" maxWidth="max-w-md">
+          <form onSubmit={submit}>
+            <h2 id="campaign-modal-title" className="mb-4 text-lg font-semibold text-stone-900">
               {form.id ? "Edit campaign" : "New campaign"}
             </h2>
-            <label className={labelClass}>Title</label>
-            <input
-              required
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="e.g. Grand opening -10%"
-              className={`${inputClass} mb-3`}
-            />
-            <label className={labelClass}>Description</label>
-            <input
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className={`${inputClass} mb-3`}
-            />
-            <label className={labelClass}>Banner image URL (optional)</label>
-            <input
-              value={form.image_url}
-              onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-              className={`${inputClass} mb-3`}
-            />
+            <Field label="Title">
+              <input
+                required
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="e.g. Grand opening -10%"
+                className="mb-3"
+              />
+            </Field>
+            <Field label="Description">
+              <input
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className="mb-3"
+              />
+            </Field>
+            <Field label="Banner image URL (optional)">
+              <input
+                value={form.image_url}
+                onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+                className="mb-3"
+              />
+            </Field>
 
-            <label className={labelClass}>Discount</label>
+            <Label>Discount</Label>
             <div className="mb-3 flex gap-2">
               {(
                 [
@@ -261,10 +256,10 @@ export default function CampaignsPage() {
                   key={option.value}
                   type="button"
                   onClick={() => setForm({ ...form, discount_type: option.value })}
-                  className={`flex-1 cursor-pointer rounded-md border px-2 py-2 text-xs font-medium ${
+                  className={`flex-1 cursor-pointer rounded-lg border px-2 py-2 text-xs font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-200 ${
                     form.discount_type === option.value
                       ? "border-amber-600 bg-amber-50 text-amber-900"
-                      : "border-stone-300 text-stone-600"
+                      : "border-stone-300 text-stone-600 hover:bg-stone-50"
                   }`}
                 >
                   {option.label}
@@ -274,86 +269,74 @@ export default function CampaignsPage() {
             {form.discount_type !== "none" && (
               <div className="mb-3 flex gap-3">
                 <div className="flex-1">
-                  <label className={labelClass}>
-                    {form.discount_type === "percent" ? "Percent (1–100)" : "Amount (₫)"}
-                  </label>
-                  <input
-                    required
-                    type="number"
-                    min={0}
-                    step="any"
-                    max={form.discount_type === "percent" ? 100 : undefined}
-                    value={form.discount_value}
-                    onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
-                    className={inputClass}
-                  />
+                  <Field label={form.discount_type === "percent" ? "Percent (1–100)" : "Amount (₫)"}>
+                    <input
+                      required
+                      type="number"
+                      min={0}
+                      step="any"
+                      max={form.discount_type === "percent" ? 100 : undefined}
+                      value={form.discount_value}
+                      onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
+                    />
+                  </Field>
                 </div>
                 <div className="flex-1">
-                  <label className={labelClass}>Min order (₫)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="any"
-                    value={form.min_order_amount}
-                    onChange={(e) => setForm({ ...form, min_order_amount: e.target.value })}
-                    className={inputClass}
-                  />
+                  <Field label="Min order (₫)">
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={form.min_order_amount}
+                      onChange={(e) => setForm({ ...form, min_order_amount: e.target.value })}
+                    />
+                  </Field>
                 </div>
               </div>
             )}
 
             <div className="mb-3 flex gap-3">
               <div className="flex-1">
-                <label className={labelClass}>Starts</label>
-                <input
-                  required
-                  type="datetime-local"
-                  value={form.starts_at}
-                  onChange={(e) => setForm({ ...form, starts_at: e.target.value })}
-                  className={inputClass}
-                />
+                <Field label="Starts">
+                  <input
+                    required
+                    type="datetime-local"
+                    value={form.starts_at}
+                    onChange={(e) => setForm({ ...form, starts_at: e.target.value })}
+                  />
+                </Field>
               </div>
               <div className="flex-1">
-                <label className={labelClass}>
-                  Ends <span className="font-normal text-stone-500">(optional)</span>
-                </label>
-                <input
-                  type="datetime-local"
-                  value={form.ends_at}
-                  onChange={(e) => setForm({ ...form, ends_at: e.target.value })}
-                  className={inputClass}
-                />
+                <Field label="Ends (optional)">
+                  <input
+                    type="datetime-local"
+                    value={form.ends_at}
+                    onChange={(e) => setForm({ ...form, ends_at: e.target.value })}
+                  />
+                </Field>
               </div>
             </div>
 
-            <label className="mb-4 flex items-center gap-2 text-sm text-stone-700">
+            <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-stone-700">
               <input
                 type="checkbox"
                 checked={form.is_active}
                 onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-                className="h-4 w-4 accent-amber-600"
+                className="h-4 w-4 cursor-pointer accent-amber-600"
               />
               Active
             </label>
 
             <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setForm(null)}
-                className="cursor-pointer rounded-md px-4 py-2 text-sm text-stone-600 hover:bg-stone-100"
-              >
+              <Button type="button" variant="ghost" onClick={() => setForm(null)}>
                 Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={busy}
-                className="cursor-pointer rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-              >
+              </Button>
+              <Button type="submit" disabled={busy}>
                 {busy ? "Saving…" : "Save campaign"}
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, getSession } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { Ingredient } from "@/lib/types";
+import { Badge, Button, Card, CardBody, CardHeader, EmptyState, ErrorBanner, Field, Label, Modal, inputClass, LoadingText } from "@/components/ui";
 
 const UNITS = ["g", "kg", "ml", "l", "piece", "box"];
 
@@ -92,34 +93,34 @@ export default function InventoryPage() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="mb-4 text-2xl font-bold text-stone-900">Inventory</h1>
-      {error && <p className="mb-4 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight text-stone-900">Inventory</h1>
+        <p className="mt-0.5 text-sm text-stone-500">Track stock levels and purchase costs per ingredient.</p>
+      </div>
+      {error && <ErrorBanner message={error} />}
 
-      <form onSubmit={addIngredient} className="mb-6 flex flex-wrap items-end gap-2">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-stone-500">Ingredient</label>
+      <form onSubmit={addIngredient} className="mb-6 flex flex-wrap items-end gap-3">
+        <Field label="Ingredient">
           <input
             required
             value={newIngredient.name}
             onChange={(e) => setNewIngredient({ ...newIngredient, name: e.target.value })}
             placeholder="e.g. Arabica beans"
-            className={`${inputClass} w-44`}
+            className="w-44"
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-stone-500">Unit</label>
+        </Field>
+        <Field label="Unit">
           <select
             value={newIngredient.unit}
             onChange={(e) => setNewIngredient({ ...newIngredient, unit: e.target.value })}
-            className={inputClass}
+            className="w-24"
           >
             {UNITS.map((u) => (
               <option key={u}>{u}</option>
             ))}
           </select>
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-stone-500">Initial stock</label>
+        </Field>
+        <Field label="Initial stock">
           <input
             type="number"
             min={0}
@@ -128,11 +129,10 @@ export default function InventoryPage() {
             onChange={(e) =>
               setNewIngredient({ ...newIngredient, current_quantity: e.target.value })
             }
-            className={`${inputClass} w-28`}
+            className="w-28"
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-stone-500">Reorder at</label>
+        </Field>
+        <Field label="Reorder at">
           <input
             type="number"
             min={0}
@@ -141,66 +141,59 @@ export default function InventoryPage() {
             onChange={(e) =>
               setNewIngredient({ ...newIngredient, reorder_level: e.target.value })
             }
-            className={`${inputClass} w-28`}
+            className="w-28"
           />
-        </div>
-        <button
-          type="submit"
-          disabled={busy || !newIngredient.name.trim()}
-          className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-        >
+        </Field>
+        <Button type="submit" disabled={busy || !newIngredient.name.trim()}>
           Add
-        </button>
+        </Button>
       </form>
 
       {ingredients === null ? (
-        <p className="text-sm text-stone-500">Loading inventory…</p>
+        <LoadingText>Loading inventory…</LoadingText>
       ) : ingredients.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-stone-300 bg-white p-8 text-center text-sm text-stone-500">
-          No ingredients yet. Add what you stock, then link them to menu item recipes.
-        </p>
+        <EmptyState>No ingredients yet. Add what you stock, then link them to menu item recipes.</EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-lg bg-white shadow-sm">
+        <Card className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-stone-500">
-                <th className="px-4 py-3 font-medium">Ingredient</th>
-                <th className="px-4 py-3 text-right font-medium">In stock</th>
-                <th className="px-4 py-3 text-right font-medium">Reorder at</th>
-                <th className="px-4 py-3 text-right font-medium">Last price</th>
-                <th className="px-4 py-3 font-medium">Supplier</th>
-                <th className="px-4 py-3" />
+                <th className="px-5 py-3 font-medium">Ingredient</th>
+                <th className="px-5 py-3 text-right font-medium">In stock</th>
+                <th className="px-5 py-3 text-right font-medium">Reorder at</th>
+                <th className="px-5 py-3 text-right font-medium">Last price</th>
+                <th className="px-5 py-3 font-medium">Supplier</th>
+                <th className="px-5 py-3" />
               </tr>
             </thead>
             <tbody>
               {ingredients.map((ing) => (
                 <tr key={ing.id} className="border-t border-stone-100">
-                  <td className="px-4 py-2 font-medium text-stone-800">
-                    {ing.name}
-                    {ing.low_stock && (
-                      <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                        Low stock
-                      </span>
-                    )}
+                  <td className="px-5 py-2.5 font-medium text-stone-800">
+                    <span className="flex items-center gap-2">
+                      {ing.name}
+                      {ing.low_stock && <Badge tone="red">Low stock</Badge>}
+                    </span>
                   </td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-5 py-2.5 text-right">
                     {ing.current_quantity} {ing.unit}
                   </td>
-                  <td className="px-4 py-2 text-right text-stone-500">
+                  <td className="px-5 py-2.5 text-right text-stone-500">
                     {ing.reorder_level} {ing.unit}
                   </td>
-                  <td className="px-4 py-2 text-right text-stone-500">
+                  <td className="px-5 py-2.5 text-right text-stone-500">
                     {ing.last_purchase_price !== null
                       ? `${money(ing.last_purchase_price)}/${ing.unit}`
                       : "—"}
                   </td>
-                  <td className="px-4 py-2 text-stone-500">{ing.supplier_name ?? "—"}</td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-5 py-2.5 text-stone-500">{ing.supplier_name ?? "—"}</td>
+                  <td className="px-5 py-2.5 text-right">
                     <button
+                      type="button"
                       onClick={() =>
                         setPurchase({ ingredient: ing, quantity: "", cost: "", supplier_name: "" })
                       }
-                      className="text-xs font-medium text-amber-700 hover:underline"
+                      className="cursor-pointer text-xs font-medium text-amber-700 transition-colors duration-200 hover:text-amber-800"
                     >
                       Log purchase
                     </button>
@@ -209,61 +202,52 @@ export default function InventoryPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </Card>
       )}
 
       {purchase && (
-        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-          <form onSubmit={submitPurchase} className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
-            <h2 className="mb-4 text-lg font-semibold text-stone-900">
-              Log purchase — {purchase.ingredient.name}
-            </h2>
-            <label className="mb-1 block text-sm font-medium text-stone-700">
-              Quantity ({purchase.ingredient.unit})
-            </label>
-            <input
-              required
-              type="number"
-              min={0.001}
-              step="any"
-              value={purchase.quantity}
-              onChange={(e) => setPurchase({ ...purchase, quantity: e.target.value })}
-              className={`${inputClass} mb-3 w-full`}
-            />
-            <label className="mb-1 block text-sm font-medium text-stone-700">Total cost</label>
-            <input
-              required
-              type="number"
-              min={0}
-              step="any"
-              value={purchase.cost}
-              onChange={(e) => setPurchase({ ...purchase, cost: e.target.value })}
-              className={`${inputClass} mb-3 w-full`}
-            />
-            <label className="mb-1 block text-sm font-medium text-stone-700">Supplier</label>
-            <input
-              value={purchase.supplier_name}
-              onChange={(e) => setPurchase({ ...purchase, supplier_name: e.target.value })}
-              className={`${inputClass} mb-5 w-full`}
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setPurchase(null)}
-                className="rounded-md px-4 py-2 text-sm text-stone-600 hover:bg-stone-100"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-              >
-                {busy ? "Saving…" : "Save purchase"}
-              </button>
-            </div>
-          </form>
-        </div>
+        <Modal onClose={() => setPurchase(null)} labelledBy="purchase-modal-title" maxWidth="max-w-sm">
+          <h2 id="purchase-modal-title" className="mb-4 text-lg font-semibold text-stone-900">
+            Log purchase — {purchase.ingredient.name}
+          </h2>
+          <Label htmlFor="qty">Quantity ({purchase.ingredient.unit})</Label>
+          <input
+            id="qty"
+            required
+            type="number"
+            min={0.001}
+            step="any"
+            value={purchase.quantity}
+            onChange={(e) => setPurchase({ ...purchase, quantity: e.target.value })}
+            className={`${inputClass} mb-3 w-full`}
+          />
+          <Label htmlFor="cost">Total cost</Label>
+          <input
+            id="cost"
+            required
+            type="number"
+            min={0}
+            step="any"
+            value={purchase.cost}
+            onChange={(e) => setPurchase({ ...purchase, cost: e.target.value })}
+            className={`${inputClass} mb-3 w-full`}
+          />
+          <Label htmlFor="supplier">Supplier</Label>
+          <input
+            id="supplier"
+            value={purchase.supplier_name}
+            onChange={(e) => setPurchase({ ...purchase, supplier_name: e.target.value })}
+            className={`${inputClass} mb-5 w-full`}
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setPurchase(null)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy} onClick={submitPurchase}>
+              {busy ? "Saving…" : "Save purchase"}
+            </Button>
+          </div>
+        </Modal>
       )}
     </div>
   );

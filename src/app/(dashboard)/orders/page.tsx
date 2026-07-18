@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { API_URL, api, getSession } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { Order, OrderStatus } from "@/lib/types";
+import { Badge, Button, EmptyState, ErrorBanner, LoadingText } from "@/components/ui";
 
 // SSE is the primary update channel; the slow poll only covers dropped streams.
 const FALLBACK_POLL_MS = 60_000;
@@ -34,12 +35,12 @@ const NEXT_ACTIONS: Record<OrderStatus, { label: string; to: OrderStatus }[]> = 
   cancelled: [],
 };
 
-const STATUS_STYLE: Record<OrderStatus, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  preparing: "bg-blue-100 text-blue-800",
-  ready: "bg-green-100 text-green-800",
-  completed: "bg-stone-200 text-stone-600",
-  cancelled: "bg-red-100 text-red-700",
+const STATUS_TONE: Record<OrderStatus, Parameters<typeof Badge>[0]["tone"]> = {
+  pending: "yellow",
+  preparing: "blue",
+  ready: "green",
+  completed: "neutral",
+  cancelled: "red",
 };
 
 export default function OrdersPage() {
@@ -117,30 +118,32 @@ export default function OrdersPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <h1 className="mb-4 flex items-center gap-2 text-2xl font-bold text-stone-900">
-        Orders
-        <span
-          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-            live ? "bg-green-100 text-green-800" : "bg-stone-200 text-stone-500"
-          }`}
-          title={live ? "Real-time updates connected" : "Reconnecting — updates may lag"}
-        >
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="flex items-center gap-3 text-2xl font-bold tracking-tight text-stone-900">
+          Orders
           <span
-            className={`inline-block h-1.5 w-1.5 rounded-full ${
-              live ? "bg-green-600" : "bg-stone-400"
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+              live ? "bg-green-100 text-green-800" : "bg-stone-200 text-stone-500"
             }`}
-          />
-          {live ? "Live" : "Offline"}
-        </span>
-      </h1>
-      {error && <p className="mb-4 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+            title={live ? "Real-time updates connected" : "Reconnecting — updates may lag"}
+          >
+            <span
+              className={`inline-block h-1.5 w-1.5 rounded-full ${
+                live ? "bg-green-600" : "bg-stone-400"
+              }`}
+            />
+            {live ? "Live" : "Offline"}
+          </span>
+        </h1>
+      </div>
+      {error && <ErrorBanner message={error} />}
 
-      <div className="mb-4 flex gap-1">
+      <div className="mb-5 flex flex-wrap gap-1">
         {TABS.map((t) => (
           <button
             key={t.label}
             onClick={() => setTab(t.value)}
-            className={`rounded-full px-3 py-1 text-sm font-medium ${
+            className={`cursor-pointer rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-amber-200 ${
               tab === t.value
                 ? "bg-amber-600 text-white"
                 : "bg-white text-stone-600 hover:bg-stone-50"
@@ -152,23 +155,20 @@ export default function OrdersPage() {
       </div>
 
       {orders === null ? (
-        <p className="text-sm text-stone-500">Loading orders…</p>
+        <LoadingText>Loading orders…</LoadingText>
       ) : orders.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-stone-300 bg-white p-8 text-center text-sm text-stone-500">
-          No orders here yet. New orders appear automatically.
-        </p>
+        <EmptyState>No orders here yet. New orders appear automatically.</EmptyState>
       ) : (
         <div className="space-y-3">
           {orders.map((order) => (
-            <div key={order.id} className="rounded-lg bg-white p-4 shadow-sm">
+            <div
+              key={order.id}
+              className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-stone-900">{order.order_number}</span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[order.status]}`}
-                  >
-                    {order.status}
-                  </span>
+                  <Badge tone={STATUS_TONE[order.status]}>{order.status}</Badge>
                   <span className="text-xs text-stone-500">
                     {new Date(order.created_at).toLocaleString("vi-VN")} · {order.source}
                     {" · "}
@@ -178,38 +178,40 @@ export default function OrdersPage() {
                   {order.payment_status === "pending" &&
                     order.payment_method !== "cash" &&
                     order.status !== "cancelled" && (
-                      <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-800">
+                      <Badge tone="rose">
                         Unpaid · {order.payment_method === "paynow" ? "PayNow" : "transfer"}
-                      </span>
+                      </Badge>
                     )}
                 </div>
                 <div className="flex gap-2">
                   {order.payment_status === "pending" &&
                     order.payment_method !== "cash" &&
                     order.status !== "cancelled" && (
-                      <button
+                      <Button
+                        variant="secondary"
                         onClick={() => void markPaid(order)}
-                        className="cursor-pointer rounded-md border border-green-600 px-3 py-1.5 text-xs font-semibold text-green-700 transition-colors duration-200 hover:bg-green-50"
+                        className="border-green-600 px-3 py-1.5 text-xs text-green-700 hover:bg-green-50"
                       >
                         Mark paid
-                      </button>
+                      </Button>
                     )}
                   {NEXT_ACTIONS[order.status].map((action) => (
-                    <button
+                    <Button
                       key={action.to}
+                      variant={action.to === "cancelled" ? "ghost" : "primary"}
                       onClick={() => advance(order, action.to)}
-                      className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                      className={
                         action.to === "cancelled"
-                          ? "text-stone-500 hover:bg-red-50 hover:text-red-700"
-                          : "bg-amber-600 text-white hover:bg-amber-700"
-                      }`}
+                          ? "px-3 py-1.5 text-xs text-stone-500 hover:bg-red-50 hover:text-red-700"
+                          : "px-3 py-1.5 text-xs"
+                      }
                     >
                       {action.label}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               </div>
-              <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
+              <div className="mt-3 flex flex-wrap items-end justify-between gap-2">
                 <div className="text-sm text-stone-600">
                   {order.customer && (
                     <p className="font-medium text-stone-800">

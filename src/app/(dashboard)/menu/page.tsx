@@ -5,6 +5,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api, getSession } from "@/lib/api";
 import { formatMoney } from "@/lib/money";
 import { AdminCategory, AdminItem, AdminMenu, Ingredient, RecipeLine } from "@/lib/types";
+import { Button, Card, CloseIcon, EmptyState, ErrorBanner, Field, Label, Modal, inputClass, LoadingText } from "@/components/ui";
 
 
 interface RecipeRow {
@@ -201,149 +202,148 @@ export default function MenuPage() {
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-stone-900">Menu</h1>
-        <button
-          onClick={() => setForm({ ...emptyForm })}
-          className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
-        >
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-stone-900">Menu</h1>
+          <p className="mt-0.5 text-sm text-stone-500">Items, prices, and recipes that deduct stock.</p>
+        </div>
+        <Button onClick={() => setForm({ ...emptyForm })}>
           + Add item
-        </button>
+        </Button>
       </div>
 
-      {error && <p className="mb-4 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+      {error && <ErrorBanner message={error} />}
 
-      <form onSubmit={addCategory} className="mb-6 flex gap-2">
-        <input
-          value={newCategory}
-          onChange={(e) => setNewCategory(e.target.value)}
-          placeholder="New category name (e.g. Coffee)"
-          className="w-64 rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
-        />
-        <button
-          type="submit"
-          disabled={busy || !newCategory.trim()}
-          className="rounded-md border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
-        >
+      <form onSubmit={addCategory} className="mb-6 flex flex-wrap items-end gap-2">
+        <Field label="New category name (e.g. Coffee)">
+          <input
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
+            placeholder="e.g. Coffee"
+            className="w-64"
+          />
+        </Field>
+        <Button type="submit" variant="secondary" disabled={busy || !newCategory.trim()}>
           Add category
-        </button>
+        </Button>
       </form>
 
       {sections.length === 0 && (
-        <p className="rounded-lg border border-dashed border-stone-300 bg-white p-8 text-center text-sm text-stone-500">
-          No menu items yet. Create a category, then add your first item.
-        </p>
+        <EmptyState>No menu items yet. Create a category, then add your first item.</EmptyState>
       )}
 
       {sections.map((section) => (
-        <section key={section.key} className="mb-6 rounded-lg bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
-            <h2 className="font-semibold text-stone-800">{section.title}</h2>
+        <Card key={section.key} className="mb-6">
+          <div className="flex items-center justify-between border-b border-stone-100 px-5 py-3">
+            <h2 className="font-semibold text-stone-900">{section.title}</h2>
             {section.category && (
               <button
+                type="button"
                 onClick={() => deleteCategory(section.category!)}
-                className="text-xs text-stone-500 hover:text-red-600"
+                className="cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-stone-500 transition-colors duration-200 hover:bg-red-50 hover:text-red-600"
               >
                 Delete category
               </button>
             )}
           </div>
           {section.items.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-stone-500">No items in this category.</p>
+            <p className="px-5 py-4 text-sm text-stone-500">No items in this category.</p>
           ) : (
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px] text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-stone-500">
-                  <th className="px-4 py-2 font-medium">Item</th>
-                  <th className="px-4 py-2 text-right font-medium">Price</th>
-                  <th className="px-4 py-2 text-right font-medium">Cost</th>
-                  <th className="px-4 py-2 text-right font-medium">Margin</th>
-                  <th className="px-4 py-2 text-center font-medium">Available</th>
-                  <th className="px-4 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {section.items.map((item) => (
-                  <tr key={item.id} className="border-t border-stone-100">
-                    <td className="px-4 py-2">
-                      <p className="font-medium text-stone-800">{item.name}</p>
-                      {item.description && (
-                        <p className="text-xs text-stone-500">{item.description}</p>
-                      )}
-                      {item.ingredients.length > 0 && (
-                        <p className="text-xs text-stone-500">
-                          recipe: {item.ingredients.length} ingredient
-                          {item.ingredients.length > 1 ? "s" : ""}
-                        </p>
-                      )}
-                      {item.variants.length > 0 && (
-                        <p className="text-xs text-amber-700">
-                          variants: {item.variants.map((v) => `${v.name} (${money(v.price)})`).join(", ")}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-right">{money(item.price)}</td>
-                    <td className="px-4 py-2 text-right text-stone-500">
-                      {item.cost !== null ? money(item.cost) : "—"}
-                    </td>
-                    <td className="px-4 py-2 text-right text-stone-500">{item.margin ?? "—"}</td>
-                    <td className="px-4 py-2 text-center">
-                      <button
-                        onClick={() => toggleAvailability(item)}
-                        disabled={busy}
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          item.is_available
-                            ? "bg-green-100 text-green-800"
-                            : "bg-stone-200 text-stone-500"
-                        }`}
-                      >
-                        {item.is_available ? "Available" : "Hidden"}
-                      </button>
-                    </td>
-                    <td className="px-4 py-2 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => openEdit(item)}
-                        className="mr-3 text-xs font-medium text-amber-700 hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => deleteItem(item)}
-                        className="text-xs text-stone-500 hover:text-red-600"
-                      >
-                        Delete
-                      </button>
-                    </td>
+              <table className="w-full min-w-[600px] text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide text-stone-500">
+                    <th className="px-5 py-2.5 font-medium">Item</th>
+                    <th className="px-5 py-2.5 text-right font-medium">Price</th>
+                    <th className="px-5 py-2.5 text-right font-medium">Cost</th>
+                    <th className="px-5 py-2.5 text-right font-medium">Margin</th>
+                    <th className="px-5 py-2.5 text-center font-medium">Available</th>
+                    <th className="px-5 py-2.5" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {section.items.map((item) => (
+                    <tr key={item.id} className="border-t border-stone-100">
+                      <td className="px-5 py-2.5">
+                        <p className="font-medium text-stone-800">{item.name}</p>
+                        {item.description && (
+                          <p className="text-xs text-stone-500">{item.description}</p>
+                        )}
+                        {item.ingredients.length > 0 && (
+                          <p className="text-xs text-stone-500">
+                            recipe: {item.ingredients.length} ingredient
+                            {item.ingredients.length > 1 ? "s" : ""}
+                          </p>
+                        )}
+                        {item.variants.length > 0 && (
+                          <p className="text-xs text-amber-700">
+                            variants: {item.variants.map((v) => `${v.name} (${money(v.price)})`).join(", ")}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-5 py-2.5 text-right">{money(item.price)}</td>
+                      <td className="px-5 py-2.5 text-right text-stone-500">
+                        {item.cost !== null ? money(item.cost) : "—"}
+                      </td>
+                      <td className="px-5 py-2.5 text-right text-stone-500">{item.margin ?? "—"}</td>
+                      <td className="px-5 py-2.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => toggleAvailability(item)}
+                          disabled={busy}
+                          className={`cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors duration-200 disabled:opacity-50 ${
+                            item.is_available
+                              ? "bg-green-100 text-green-800 hover:bg-green-200"
+                              : "bg-stone-200 text-stone-500 hover:bg-stone-300"
+                          }`}
+                        >
+                          {item.is_available ? "Available" : "Hidden"}
+                        </button>
+                      </td>
+                      <td className="px-5 py-2.5 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(item)}
+                          className="mr-3 cursor-pointer text-xs font-medium text-amber-700 transition-colors duration-200 hover:text-amber-800"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteItem(item)}
+                          className="cursor-pointer text-xs font-medium text-stone-500 transition-colors duration-200 hover:text-red-600"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
-        </section>
+        </Card>
       ))}
 
       {form && (
-        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
-          <form
-            onSubmit={submitItem}
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg"
-          >
-            <h2 className="mb-4 text-lg font-semibold text-stone-900">
-              {form.id ? "Edit item" : "New item"}
-            </h2>
-            <label className="mb-1 block text-sm font-medium text-stone-700">Name</label>
+        <Modal onClose={() => setForm(null)} labelledBy="item-modal-title" maxWidth="max-w-md">
+          <h2 id="item-modal-title" className="mb-4 text-lg font-semibold text-stone-900">
+            {form.id ? "Edit item" : "New item"}
+          </h2>
+          <form onSubmit={submitItem}>
+            <Label htmlFor="item-name">Name</Label>
             <input
+              id="item-name"
               required
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="mb-3 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              className="mb-3 w-full"
             />
-            <label className="mb-1 block text-sm font-medium text-stone-700">Category</label>
+            <Label htmlFor="item-cat">Category</Label>
             <select
+              id="item-cat"
               value={form.category_id}
               onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-              className="mb-3 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              className="mb-3 w-full"
             >
               <option value="">Uncategorized</option>
               {categoryOptions.map((c) => (
@@ -352,43 +352,46 @@ export default function MenuPage() {
                 </option>
               ))}
             </select>
-            <label className="mb-1 block text-sm font-medium text-stone-700">Description</label>
+            <Label htmlFor="item-desc">Description</Label>
             <input
+              id="item-desc"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="mb-3 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              className="mb-3 w-full"
             />
             <div className="mb-3 flex gap-3">
               <div className="flex-1">
-                <label className="mb-1 block text-sm font-medium text-stone-700">Price</label>
+                <Label htmlFor="item-price">Price</Label>
                 <input
+                  id="item-price"
                   required
                   type="number"
                   min={0}
                   step="any"
                   value={form.price}
                   onChange={(e) => setForm({ ...form, price: e.target.value })}
-                  className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                  className="w-full"
                 />
               </div>
               <div className="flex-1">
-                <label className="mb-1 block text-sm font-medium text-stone-700">Cost</label>
+                <Label htmlFor="item-cost">Cost</Label>
                 <input
+                  id="item-cost"
                   type="number"
                   min={0}
                   step="any"
                   value={form.cost}
                   onChange={(e) => setForm({ ...form, cost: e.target.value })}
-                  className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                  className="w-full"
                 />
               </div>
             </div>
             {/* Variants */}
             <div className="mb-3">
               <div className="mb-1 flex items-center justify-between">
-                <label className="block text-sm font-medium text-stone-700">
+                <Label>
                   Variants <span className="font-normal text-stone-500">(optional — for multi-price items)</span>
-                </label>
+                </Label>
                 <button
                   type="button"
                   onClick={() =>
@@ -397,7 +400,7 @@ export default function MenuPage() {
                       variants: [...form.variants, { name: "", price: "", cost: "" }],
                     })
                   }
-                  className="text-xs font-medium text-amber-700 hover:underline"
+                  className="cursor-pointer text-xs font-medium text-amber-700 transition-colors duration-200 hover:text-amber-800"
                 >
                   + Add variant
                 </button>
@@ -412,7 +415,7 @@ export default function MenuPage() {
                       variants[index] = { ...row, name: e.target.value };
                       setForm({ ...form, variants });
                     }}
-                    className="flex-1 rounded-md border border-stone-300 px-2 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
+                    className="flex-1"
                   />
                   <input
                     type="number"
@@ -426,7 +429,7 @@ export default function MenuPage() {
                       variants[index] = { ...row, price: e.target.value };
                       setForm({ ...form, variants });
                     }}
-                    className="w-24 rounded-md border border-stone-300 px-2 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
+                    className="w-24"
                   />
                   <input
                     type="number"
@@ -439,50 +442,53 @@ export default function MenuPage() {
                       variants[index] = { ...row, cost: e.target.value };
                       setForm({ ...form, variants });
                     }}
-                    className="w-24 rounded-md border border-stone-300 px-2 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
+                    className="w-24"
                   />
                   <button
                     type="button"
+                    aria-label="Remove variant"
                     onClick={() =>
                       setForm({ ...form, variants: form.variants.filter((_, i) => i !== index) })
                     }
-                    className="text-xs text-stone-500 hover:text-red-600"
+                    className="cursor-pointer rounded-md p-1.5 text-stone-500 transition-colors duration-200 hover:bg-red-50 hover:text-red-600"
                   >
-                    ✕
+                    <CloseIcon className="h-4 w-4" />
                   </button>
                 </div>
               ))}
               {form.variants.length === 0 && (
-                <p className="rounded-md bg-stone-50 p-2 text-xs text-stone-500">
+                <p className="rounded-lg bg-stone-50 p-2 text-xs text-stone-500">
                   No variants — item has a single price. Add variants for packet sizes, portion options, etc.
                 </p>
               )}
             </div>
 
-            <label className="mb-1 block text-sm font-medium text-stone-700">Image URL</label>
+            <Label htmlFor="item-img">Image URL</Label>
             <input
+              id="item-img"
               value={form.image_url}
               onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-              className="mb-3 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              className="mb-3 w-full"
             />
 
-            <label className="mb-1 block text-sm font-medium text-stone-700">
+            <Label htmlFor="item-imgs">
               Additional images{" "}
               <span className="font-normal text-stone-500">(one URL per line — shown as a carousel)</span>
-            </label>
+            </Label>
             <textarea
+              id="item-imgs"
               value={form.image_urls}
               onChange={(e) => setForm({ ...form, image_urls: e.target.value })}
               rows={3}
               placeholder={"https://…/photo-2.jpg\nhttps://…/photo-3.jpg"}
-              className="mb-3 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              className="mb-3 w-full"
             />
 
             <div className="mb-3">
               <div className="mb-1 flex items-center justify-between">
-                <label className="block text-sm font-medium text-stone-700">
+                <Label>
                   Recipe <span className="font-normal text-stone-500">(auto-deducts stock)</span>
-                </label>
+                </Label>
                 <button
                   type="button"
                   disabled={ingredients.length === 0}
@@ -492,13 +498,13 @@ export default function MenuPage() {
                       recipe: [...form.recipe, { ingredient_id: ingredients[0]?.id ?? "", quantity: "" }],
                     })
                   }
-                  className="text-xs font-medium text-amber-700 hover:underline disabled:opacity-40"
+                  className="cursor-pointer text-xs font-medium text-amber-700 transition-colors duration-200 hover:text-amber-800 disabled:opacity-40"
                 >
                   + Add ingredient
                 </button>
               </div>
               {ingredients.length === 0 ? (
-                <p className="rounded-md bg-stone-50 p-2 text-xs text-stone-500">
+                <p className="rounded-lg bg-stone-50 p-2 text-xs text-stone-500">
                   No ingredients in stock yet —{" "}
                   <Link href="/inventory" className="text-amber-700 hover:underline">
                     add some in Inventory
@@ -517,7 +523,7 @@ export default function MenuPage() {
                           recipe[index] = { ...row, ingredient_id: e.target.value };
                           setForm({ ...form, recipe });
                         }}
-                        className="flex-1 rounded-md border border-stone-300 px-2 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
+                        className="flex-1"
                       >
                         {ingredients.map((ing) => (
                           <option key={ing.id} value={ing.id}>
@@ -537,49 +543,43 @@ export default function MenuPage() {
                           recipe[index] = { ...row, quantity: e.target.value };
                           setForm({ ...form, recipe });
                         }}
-                        className="w-20 rounded-md border border-stone-300 px-2 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
+                        className="w-20"
                       />
                       <span className="w-10 text-xs text-stone-500">{unit}</span>
                       <button
                         type="button"
+                        aria-label="Remove ingredient"
                         onClick={() =>
                           setForm({ ...form, recipe: form.recipe.filter((_, i) => i !== index) })
                         }
-                        className="text-xs text-stone-500 hover:text-red-600"
+                        className="cursor-pointer rounded-md p-1.5 text-stone-500 transition-colors duration-200 hover:bg-red-50 hover:text-red-600"
                       >
-                        ✕
+                        <CloseIcon className="h-4 w-4" />
                       </button>
                     </div>
                   );
                 })
               )}
             </div>
-            <label className="mb-4 flex items-center gap-2 text-sm text-stone-700">
+            <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-stone-700">
               <input
                 type="checkbox"
                 checked={form.is_available}
                 onChange={(e) => setForm({ ...form, is_available: e.target.checked })}
+                className="h-4 w-4 cursor-pointer accent-amber-600"
               />
               Available for ordering
             </label>
             <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setForm(null)}
-                className="rounded-md px-4 py-2 text-sm text-stone-600 hover:bg-stone-100"
-              >
+              <Button type="button" variant="ghost" onClick={() => setForm(null)}>
                 Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-              >
+              </Button>
+              <Button type="submit" disabled={busy}>
                 {busy ? "Saving…" : "Save"}
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );
