@@ -10,6 +10,20 @@ interface SeoConfig {
   og_image_url: string | null;
 }
 
+interface OrderPageConfig {
+  banner_image_url: string | null;
+  banner_headline: string | null;
+  banner_subtitle: string | null;
+  announcement: string | null;
+  announcement_style: "info" | "warning" | "promo";
+  show_address: boolean;
+  show_phone: boolean;
+  opening_hours: string | null;
+  instagram_handle: string | null;
+  tiktok_username: string | null;
+  facebook_page_url: string | null;
+}
+
 interface ShopSettings {
   shop_name: string;
   slug: string;
@@ -24,6 +38,7 @@ interface ShopSettings {
   paynow_proxy_value: string | null;
   facebook_page_id: string | null;
   facebook_connected: boolean;
+  order_page: OrderPageConfig;
   seo: SeoConfig;
 }
 
@@ -53,6 +68,19 @@ export default function SettingsPage() {
     keywords: "",
     og_image_url: "",
   });
+  const [orderPage, setOrderPage] = useState<OrderPageConfig>({
+    banner_image_url: "",
+    banner_headline: "",
+    banner_subtitle: "",
+    announcement: "",
+    announcement_style: "promo",
+    show_address: true,
+    show_phone: true,
+    opening_hours: "",
+    instagram_handle: "",
+    tiktok_username: "",
+    facebook_page_url: "",
+  });
   const [copied, setCopied] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -76,6 +104,19 @@ export default function SettingsPage() {
         description: data.seo.description ?? "",
         keywords: data.seo.keywords ?? "",
         og_image_url: data.seo.og_image_url ?? "",
+      });
+      setOrderPage({
+        banner_image_url: data.order_page.banner_image_url ?? "",
+        banner_headline: data.order_page.banner_headline ?? "",
+        banner_subtitle: data.order_page.banner_subtitle ?? "",
+        announcement: data.order_page.announcement ?? "",
+        announcement_style: data.order_page.announcement_style,
+        show_address: data.order_page.show_address,
+        show_phone: data.order_page.show_phone,
+        opening_hours: data.order_page.opening_hours ?? "",
+        instagram_handle: data.order_page.instagram_handle ?? "",
+        tiktok_username: data.order_page.tiktok_username ?? "",
+        facebook_page_url: data.order_page.facebook_page_url ?? "",
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load settings");
@@ -435,6 +476,115 @@ export default function SettingsPage() {
           className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
         >
           Save SEO settings
+        </button>
+      </section>
+
+      <section className="mb-6 rounded-lg bg-white p-5 shadow-sm">
+        <h2 className="mb-3 font-semibold text-stone-800">Order page appearance</h2>
+        <p className="mb-3 text-xs text-stone-500">
+          Customise the top banner shown on your public order page.
+        </p>
+        <div className="mb-3 grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-stone-700">Banner headline</label>
+            <input
+              value={orderPage.banner_headline ?? ""}
+              onChange={(e) => setOrderPage({ ...orderPage, banner_headline: e.target.value })}
+              placeholder="e.g. Grand Opening"
+              className={inputClass}
+            />
+          </div>
+        </div>
+        <label className="mb-1 block text-sm font-medium text-stone-700">Banner subtitle</label>
+        <input
+          value={orderPage.banner_subtitle ?? ""}
+          onChange={(e) => setOrderPage({ ...orderPage, banner_subtitle: e.target.value })}
+          placeholder="e.g. 20% off your first order"
+          className={`${inputClass} mb-3`}
+        />
+        <label className="mb-1 block text-sm font-medium text-stone-700">
+          Banner image URL{" "}
+          <span className="font-normal text-stone-500">(optional — leave blank for a gradient)</span>
+        </label>
+        <input
+          value={orderPage.banner_image_url ?? ""}
+          onChange={(e) => setOrderPage({ ...orderPage, banner_image_url: e.target.value })}
+          placeholder="https://…"
+          className={`${inputClass} mb-3`}
+        />
+        <label className="mb-1 block text-sm font-medium text-stone-700">
+          Announcement{" "}
+          <span className="font-normal text-stone-500">(shown below the banner)</span>
+        </label>
+        <div className="mb-3 flex gap-2">
+          <input
+            value={orderPage.announcement ?? ""}
+            onChange={(e) => setOrderPage({ ...orderPage, announcement: e.target.value })}
+            placeholder="e.g. New menu items added!"
+            className={`${inputClass} flex-1`}
+          />
+          <select
+            value={orderPage.announcement_style}
+            onChange={(e) =>
+              setOrderPage({ ...orderPage, announcement_style: e.target.value as "info" | "warning" | "promo" })
+            }
+            className={`${inputClass} w-28`}
+          >
+            <option value="promo">Promo</option>
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+          </select>
+        </div>
+        <label className="mb-1 block text-sm font-medium text-stone-700">Opening hours</label>
+        <input
+          value={orderPage.opening_hours ?? ""}
+          onChange={(e) => setOrderPage({ ...orderPage, opening_hours: e.target.value })}
+          placeholder="e.g. Mon–Fri 8am–8pm, Sat–Sun 9am–6pm"
+          className={`${inputClass} mb-4`}
+        />
+        <div className="mb-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-stone-700">Instagram</label>
+            <input
+              value={orderPage.instagram_handle ?? ""}
+              onChange={(e) => setOrderPage({ ...orderPage, instagram_handle: e.target.value })}
+              placeholder="username"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-stone-700">TikTok</label>
+            <input
+              value={orderPage.tiktok_username ?? ""}
+              onChange={(e) => setOrderPage({ ...orderPage, tiktok_username: e.target.value })}
+              placeholder="username"
+              className={inputClass}
+            />
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            void save({
+              order_page: {
+                banner_image_url: orderPage.banner_image_url?.trim() || null,
+                banner_headline: orderPage.banner_headline?.trim() || null,
+                banner_subtitle: orderPage.banner_subtitle?.trim() || null,
+                announcement: orderPage.announcement?.trim() || null,
+                announcement_style: orderPage.announcement_style,
+                show_address: orderPage.show_address,
+                show_phone: orderPage.show_phone,
+                opening_hours: orderPage.opening_hours?.trim() || null,
+                instagram_handle: orderPage.instagram_handle?.trim() || null,
+                tiktok_username: orderPage.tiktok_username?.trim() || null,
+                facebook_page_url: orderPage.facebook_page_url?.trim() || null,
+              },
+            })
+          }
+          className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+        >
+          Save order page settings
         </button>
       </section>
 

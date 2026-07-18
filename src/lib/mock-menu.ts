@@ -13,6 +13,19 @@ export const MOCK_MENU: PublicMenu = {
   estimated_wait_minutes: 10,
   currency: "SGD",
   payment_methods: ["cash", "paynow", "bank_transfer"],
+  order_page: {
+    banner_image_url: null,
+    banner_headline: null,
+    banner_subtitle: null,
+    announcement: null,
+    announcement_style: "promo",
+    show_address: true,
+    show_phone: true,
+    opening_hours: null,
+    instagram_handle: "thebrewhouse",
+    tiktok_username: null,
+    facebook_page_url: null,
+  },
   seo: null,
   campaigns: [
     {
