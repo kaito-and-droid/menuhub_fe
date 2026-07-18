@@ -187,6 +187,7 @@ export interface PublicMenu {
   categories: { name: string; items: PublicMenuItem[] }[];
   order_page: OrderPageConfig | null;
   seo: SeoConfig | null;
+  menu_layout?: "grid" | "list";
 }
 
 export interface RevenueAnalytics {

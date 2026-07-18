@@ -94,6 +94,9 @@ const en: Dict = {
   "updates_auto": "Updates automatically · placed {time}",
   "language": "Language",
   "currency_label": "Currency",
+  "menu_layout": "Menu layout",
+  "layout_grid": "Grid view",
+  "layout_list": "List view",
 };
 
 const vi: Dict = {
@@ -160,6 +163,9 @@ const vi: Dict = {
   "updates_auto": "Tự động cập nhật · đặt lúc {time}",
   "language": "Ngôn ngữ",
   "currency_label": "Tiền tệ",
+  "menu_layout": "Kiểu hiển thị",
+  "layout_grid": "Lưới",
+  "layout_list": "Danh sách",
 };
 
 const dicts: Record<OrderLocale, Dict> = { en, vi };
