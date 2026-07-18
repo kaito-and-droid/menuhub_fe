@@ -26,6 +26,217 @@ function paymentLabel(method: string, locale: string): string {
   return locale === "vi" ? entry.vi : entry.en;
 }
 
+/* ---------- item card (shared by grid + list layouts) ---------- */
+const IconGrid = () => (
+  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+  </svg>
+);
+const IconList = () => (
+  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+  </svg>
+);
+
+interface ItemCardProps {
+  item: PublicMenuItem;
+  selectedVariant: Record<string, string>;
+  setSelectedVariant: (v: Record<string, string>) => void;
+  cart: Record<string, number>;
+  adjust: (id: string, delta: number, variant?: string | null) => void;
+  money: (v: number) => string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+  layout: "grid" | "list";
+}
+
+function ItemCard({
+  item,
+  selectedVariant,
+  setSelectedVariant,
+  cart,
+  adjust,
+  money,
+  t,
+  layout,
+}: ItemCardProps) {
+  const hasVariants = item.variants && item.variants.length > 0;
+  const selVariant = hasVariants ? (selectedVariant[item.id] ?? item.variants[0].name) : null;
+  const displayPrice = hasVariants
+    ? item.variants.find((v) => v.name === selVariant)?.price ?? item.price
+    : item.price;
+  const itemKeys = hasVariants
+    ? item.variants.map((v) => cartKey(item.id, v.name))
+    : [cartKey(item.id)];
+  const totalQty = itemKeys.reduce((n, k) => n + (cart[k] ?? 0), 0);
+  const curKey = cartKey(item.id, selVariant);
+  const curQty = cart[curKey] ?? 0;
+
+  if (layout === "list") {
+    return (
+      <article
+        className={`relative flex items-center gap-3 overflow-hidden rounded-2xl bg-white p-2.5 shadow-[0_2px_12px_rgba(120,80,40,0.07)] transition-all duration-200 hover:shadow-[0_6px_24px_rgba(120,80,40,0.15)] ${
+          totalQty > 0 ? "ring-2 ring-amber-600/70" : ""
+        }`}
+      >
+        {item.image_url ? (
+          <img
+            src={item.image_url}
+            alt={item.name}
+            loading="lazy"
+            className="h-20 w-20 shrink-0 rounded-xl object-cover"
+          />
+        ) : (
+          <div
+            aria-hidden
+            className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 text-3xl font-bold text-amber-700 [font-family:var(--font-display)]"
+          >
+            {item.name.charAt(0)}
+          </div>
+        )}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <h3 className="line-clamp-2 text-sm font-bold leading-snug text-stone-900">{item.name}</h3>
+          {item.description && (
+            <p className="mt-0.5 line-clamp-1 text-xs text-stone-500">{item.description}</p>
+          )}
+          <div className="mt-1 flex items-center gap-2">
+            <p className="text-xs font-semibold text-amber-800">{money(displayPrice)}</p>
+            {hasVariants && (
+              <select
+                value={selVariant ?? ""}
+                onChange={(e) =>
+                  setSelectedVariant({ ...selectedVariant, [item.id]: e.target.value })
+                }
+                className="rounded-md border border-stone-200 px-1.5 py-1 text-[11px] focus:border-amber-500 focus:outline-none"
+              >
+                {item.variants.map((v) => (
+                  <option key={v.name} value={v.name}>
+                    {v.name} — {money(v.price)}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+        <div className="shrink-0">
+          {curQty === 0 ? (
+            <button
+              onClick={() => adjust(item.id, +1, selVariant)}
+              aria-label={t("add_one", { label: item.name })}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-700 text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+            >
+              <IconPlus />
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 rounded-full bg-amber-50 px-1 py-1">
+              <button
+                onClick={() => adjust(item.id, -1, selVariant)}
+                aria-label={t("remove_one", { label: item.name })}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-amber-800 transition-colors duration-200 hover:bg-amber-100 focus:outline-none"
+              >
+                <IconMinus />
+              </button>
+              <span className="w-4 text-center text-sm font-bold text-stone-900" aria-live="polite">
+                {curQty}
+              </span>
+              <button
+                onClick={() => adjust(item.id, +1, selVariant)}
+                aria-label={t("add_one", { label: item.name })}
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-700 text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none"
+              >
+                <IconPlus />
+              </button>
+            </div>
+          )}
+        </div>
+        {totalQty > 0 && (
+          <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-amber-700 text-[11px] font-bold text-white shadow">
+            {totalQty}
+          </span>
+        )}
+      </article>
+    );
+  }
+
+  return (
+    <article
+      className={`relative flex w-40 shrink-0 snap-start flex-col overflow-hidden rounded-2xl bg-white shadow-[0_2px_12px_rgba(120,80,40,0.07)] transition-all duration-200 hover:shadow-[0_6px_24px_rgba(120,80,40,0.15)] ${
+        totalQty > 0 ? "ring-2 ring-amber-600/70" : ""
+      }`}
+    >
+      {item.image_url ? (
+        <img
+          src={item.image_url}
+          alt={item.name}
+          loading="lazy"
+          className="h-36 w-full object-cover"
+        />
+      ) : (
+        <div
+          aria-hidden
+          className="flex h-36 w-full items-center justify-center bg-gradient-to-br from-amber-100 to-amber-200 text-4xl font-bold text-amber-700 [font-family:var(--font-display)]"
+        >
+          {item.name.charAt(0)}
+        </div>
+      )}
+      {totalQty > 0 && (
+        <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-amber-700 text-[11px] font-bold text-white shadow">
+          {totalQty}
+        </span>
+      )}
+      <div className="flex flex-1 flex-col p-2.5">
+        <h3 className="line-clamp-2 text-sm font-bold leading-snug text-stone-900">{item.name}</h3>
+        <p className="mt-1 text-xs font-semibold text-amber-800">{money(displayPrice)}</p>
+        {hasVariants && (
+          <select
+            value={selVariant ?? ""}
+            onChange={(e) =>
+              setSelectedVariant({ ...selectedVariant, [item.id]: e.target.value })
+            }
+            className="mt-1 w-full rounded-md border border-stone-200 px-1.5 py-1 text-[11px] focus:border-amber-500 focus:outline-none"
+          >
+            {item.variants.map((v) => (
+              <option key={v.name} value={v.name}>
+                {v.name} — {money(v.price)}
+              </option>
+            ))}
+          </select>
+        )}
+        <div className="mt-auto pt-2">
+          {curQty === 0 ? (
+            <button
+              onClick={() => adjust(item.id, +1, selVariant)}
+              aria-label={t("add_one", { label: item.name })}
+              className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-xl bg-amber-700 py-1.5 text-xs font-bold text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+            >
+              <IconPlus /> {t("add")}
+            </button>
+          ) : (
+            <div className="flex items-center justify-between rounded-xl bg-amber-50 px-1 py-1">
+              <button
+                onClick={() => adjust(item.id, -1, selVariant)}
+                aria-label={t("remove_one", { label: item.name })}
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-amber-800 transition-colors duration-200 hover:bg-amber-100 focus:outline-none"
+              >
+                <IconMinus />
+              </button>
+              <span className="w-5 text-center text-sm font-bold text-stone-900" aria-live="polite">
+                {curQty}
+              </span>
+              <button
+                onClick={() => adjust(item.id, +1, selVariant)}
+                aria-label={t("add_one", { label: item.name })}
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-amber-700 text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none"
+              >
+                <IconPlus />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
 
 /** Composite cart key: itemId or "itemId::variantName" */
 function cartKey(id: string, variant?: string | null): string {
@@ -202,6 +413,7 @@ export default function PublicOrderPage() {
   const [isMember, setIsMember] = useState(false);
   const [returningMember, setReturningMember] = useState<MemberRecord | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [layout, setLayout] = useState<"grid" | "list">("grid");
   const { locale, t, setLocale } = useOrderI18n();
   const money = (v: number) => formatMoney(v, menu?.currency);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -214,6 +426,7 @@ export default function PublicOrderPage() {
       // ── DEV MOCK: no backend needed — visit /order/demo ──
       setMenu(MOCK_MENU);
       setActiveCategory(MOCK_MENU.categories[0]?.name ?? null);
+      setLayout(MOCK_MENU.menu_layout ?? "grid");
       setForm((f) => ({ ...f, payment_method: MOCK_MENU.payment_methods[0] ?? "cash" }));
       return;
     }
@@ -221,6 +434,7 @@ export default function PublicOrderPage() {
       .then((data) => {
         setMenu(data);
         setActiveCategory(data.categories[0]?.name ?? null);
+        setLayout(data.menu_layout ?? "grid");
         setForm((f) => ({ ...f, payment_method: data.payment_methods[0] ?? "cash" }));
       })
       .catch(() => setNotFound(true));
@@ -611,8 +825,41 @@ export default function PublicOrderPage() {
         </nav>
       )}
 
-      {/* Menu sections */}
-      <div className="mx-auto max-w-lg px-4 pt-6">
+      {/* Layout toggle + menu sections */}
+      <div className="mx-auto max-w-lg px-4 pt-4">
+        <div className="flex items-center justify-end">
+          <div
+            role="group"
+            aria-label={t("menu_layout")}
+            className="flex rounded-full bg-white p-1 shadow-[0_2px_12px_rgba(120,80,40,0.10)]"
+          >
+            <button
+              type="button"
+              onClick={() => setLayout("grid")}
+              aria-pressed={layout === "grid"}
+              aria-label={t("layout_grid")}
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+                layout === "grid" ? "bg-amber-700 text-white" : "text-stone-500 hover:text-amber-800"
+              }`}
+            >
+              <IconGrid />
+            </button>
+            <button
+              type="button"
+              onClick={() => setLayout("list")}
+              aria-pressed={layout === "list"}
+              aria-label={t("layout_list")}
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
+                layout === "list" ? "bg-amber-700 text-white" : "text-stone-500 hover:text-amber-800"
+              }`}
+            >
+              <IconList />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-lg px-4 pt-3">
         {menu.categories.map((category) => (
           <section
             key={category.name}
@@ -624,114 +871,39 @@ export default function PublicOrderPage() {
             <h2 className="mb-3 text-xl font-bold text-stone-900 [font-family:var(--font-display)]">
               {category.name}
             </h2>
-            {/* Horizontal image-card scroll strip */}
-            <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-              {category.items.map((item) => {
-                const hasVariants = item.variants && item.variants.length > 0;
-                const selVariant = hasVariants ? (selectedVariant[item.id] ?? item.variants[0].name) : null;
-                const displayPrice = hasVariants
-                  ? item.variants.find((v) => v.name === selVariant)?.price ?? item.price
-                  : item.price;
-                const itemKeys = hasVariants
-                  ? item.variants.map((v) => cartKey(item.id, v.name))
-                  : [cartKey(item.id)];
-                const totalQty = itemKeys.reduce((n, k) => n + (cart[k] ?? 0), 0);
-                const curKey = cartKey(item.id, selVariant);
-                const curQty = cart[curKey] ?? 0;
-                return (
-                  <article
+            {layout === "list" ? (
+              <div className="space-y-2.5">
+                {category.items.map((item) => (
+                  <ItemCard
                     key={item.id}
-                    className={`relative flex w-40 shrink-0 snap-start flex-col overflow-hidden rounded-2xl bg-white shadow-[0_2px_12px_rgba(120,80,40,0.07)] transition-all duration-200 hover:shadow-[0_6px_24px_rgba(120,80,40,0.15)] ${
-                      totalQty > 0 ? "ring-2 ring-amber-600/70" : ""
-                    }`}
-                  >
-                    {/* Image */}
-                    {item.image_url ? (
-                      <img
-                        src={item.image_url}
-                        alt={item.name}
-                        loading="lazy"
-                        className="h-36 w-full object-cover"
-                      />
-                    ) : (
-                      <div
-                        aria-hidden
-                        className="flex h-36 w-full items-center justify-center bg-gradient-to-br from-amber-100 to-amber-200 text-4xl font-bold text-amber-700 [font-family:var(--font-display)]"
-                      >
-                        {item.name.charAt(0)}
-                      </div>
-                    )}
-
-                    {/* Cart badge */}
-                    {totalQty > 0 && (
-                      <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-amber-700 text-[11px] font-bold text-white shadow">
-                        {totalQty}
-                      </span>
-                    )}
-
-                    {/* Info */}
-                    <div className="flex flex-1 flex-col p-2.5">
-                      <h3 className="line-clamp-2 text-sm font-bold leading-snug text-stone-900">
-                        {item.name}
-                      </h3>
-                      <p className="mt-1 text-xs font-semibold text-amber-800">
-                        {money(displayPrice)}
-                      </p>
-
-                      {/* Variant selector */}
-                      {hasVariants && (
-                        <select
-                          value={selVariant ?? ""}
-                          onChange={(e) =>
-                            setSelectedVariant({ ...selectedVariant, [item.id]: e.target.value })
-                          }
-                          className="mt-1 w-full rounded-md border border-stone-200 px-1.5 py-1 text-[11px] focus:border-amber-500 focus:outline-none"
-                        >
-                          {item.variants.map((v) => (
-                            <option key={v.name} value={v.name}>
-                              {v.name} — {money(v.price)}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-
-                      {/* Add / stepper */}
-                      <div className="mt-auto pt-2">
-                        {curQty === 0 ? (
-                          <button
-                            onClick={() => adjust(item.id, +1, selVariant)}
-                            aria-label={t("add_one", { label: item.name })}
-                            className="flex w-full cursor-pointer items-center justify-center gap-1 rounded-xl bg-amber-700 py-1.5 text-xs font-bold text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-                          >
-                            <IconPlus /> {t("add")}
-                          </button>
-                        ) : (
-                          <div className="flex items-center justify-between rounded-xl bg-amber-50 px-1 py-1">
-                            <button
-                              onClick={() => adjust(item.id, -1, selVariant)}
-                              aria-label={t("remove_one", { label: item.name })}
-                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-amber-800 transition-colors duration-200 hover:bg-amber-100 focus:outline-none"
-                            >
-                              <IconMinus />
-                            </button>
-                            <span className="w-5 text-center text-sm font-bold text-stone-900" aria-live="polite">
-                              {curQty}
-                            </span>
-                            <button
-                              onClick={() => adjust(item.id, +1, selVariant)}
-                              aria-label={t("add_one", { label: item.name })}
-                              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-amber-700 text-white transition-colors duration-200 hover:bg-amber-800 focus:outline-none"
-                            >
-                              <IconPlus />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+                    item={item}
+                    selectedVariant={selectedVariant}
+                    setSelectedVariant={setSelectedVariant}
+                    cart={cart}
+                    adjust={adjust}
+                    money={money}
+                    t={t}
+                    layout="list"
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {category.items.map((item) => (
+                  <ItemCard
+                    key={item.id}
+                    item={item}
+                    selectedVariant={selectedVariant}
+                    setSelectedVariant={setSelectedVariant}
+                    cart={cart}
+                    adjust={adjust}
+                    money={money}
+                    t={t}
+                    layout="grid"
+                  />
+                ))}
+              </div>
+            )}
           </section>
         ))}
       </div>

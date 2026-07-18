@@ -66,6 +66,7 @@ export const MOCK_MENU: PublicMenu = {
     ],
   },
   seo: null,
+  menu_layout: "grid",
   campaigns: [
     {
       id: "c1",

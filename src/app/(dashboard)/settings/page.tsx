@@ -24,6 +24,7 @@ interface OrderPageConfig {
   tiktok_username: string | null;
   facebook_page_url: string | null;
   media_gallery: GalleryItem[];
+  menu_layout: "grid" | "list";
 }
 
 interface ShopSettings {
@@ -42,6 +43,7 @@ interface ShopSettings {
   facebook_connected: boolean;
   order_page: OrderPageConfig;
   seo: SeoConfig;
+  menu_layout?: "grid" | "list";
 }
 
 const inputClass =
@@ -93,6 +95,7 @@ export default function SettingsPage() {
     tiktok_username: "",
     facebook_page_url: "",
     media_gallery: [],
+    menu_layout: "grid",
   });
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [tiktokUrl, setTiktokUrl] = useState("");
@@ -135,6 +138,7 @@ export default function SettingsPage() {
         tiktok_username: data.order_page.tiktok_username ?? "",
         facebook_page_url: data.order_page.facebook_page_url ?? "",
         media_gallery: data.order_page.media_gallery ?? [],
+        menu_layout: data.order_page.menu_layout ?? "grid",
       });
       setGalleryItems(data.order_page.media_gallery ?? []);
     } catch (err) {
@@ -212,6 +216,7 @@ export default function SettingsPage() {
         tiktok_username: data.order_page.tiktok_username ?? "",
         facebook_page_url: data.order_page.facebook_page_url ?? "",
         media_gallery: data.order_page.media_gallery ?? [],
+        menu_layout: data.order_page.menu_layout ?? "grid",
       });
       setGalleryItems(data.order_page.media_gallery ?? []);
       setSaved(true);
@@ -647,6 +652,15 @@ export default function SettingsPage() {
               placeholder="e.g. Mon–Fri 8am–8pm, Sat–Sun 9am–6pm"
               className={`${inputClass} mb-4`}
             />
+            <label className="mb-1 block text-sm font-medium text-stone-700">Menu layout</label>
+            <select
+              value={orderPage.menu_layout}
+              onChange={(e) => setOrderPage({ ...orderPage, menu_layout: e.target.value as "grid" | "list" })}
+              className={`${inputClass} mb-4 w-40`}
+            >
+              <option value="grid">Grid (default)</option>
+              <option value="list">List</option>
+            </select>
             <div className="mb-4 grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-stone-700">Instagram</label>
@@ -685,6 +699,7 @@ export default function SettingsPage() {
                     tiktok_username: orderPage.tiktok_username?.trim() || null,
                     facebook_page_url: orderPage.facebook_page_url?.trim() || null,
                     media_gallery: galleryItems,
+                    menu_layout: orderPage.menu_layout,
                   },
                 })
               }
