@@ -47,10 +47,20 @@ interface ShopSettings {
 const inputClass =
   "w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none";
 
+const TABS = [
+  { id: "general", label: "General" },
+  { id: "messenger", label: "Messenger" },
+  { id: "appearance", label: "Appearance" },
+  { id: "share", label: "Share & Embed" },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
 export default function SettingsPage() {
   const shopId = getSession()?.shop_id;
   const base = `/api/shops/${shopId}/settings`;
 
+  const [activeTab, setActiveTab] = useState<TabId>("general");
   const [settings, setSettings] = useState<ShopSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -262,512 +272,541 @@ export default function SettingsPage() {
       </div>
       {error && <p className="mb-4 rounded bg-red-50 p-2 text-sm text-red-700">{error}</p>}
 
-      <form onSubmit={saveInfo} className="mb-6 rounded-lg bg-white p-5 shadow-sm">
-        <h2 className="mb-3 font-semibold text-stone-800">Shop info</h2>
-        <label className="mb-1 block text-sm font-medium text-stone-700">Shop name</label>
-        <input
-          required
-          value={form.shop_name}
-          onChange={(e) => setForm({ ...form, shop_name: e.target.value })}
-          className={`${inputClass} mb-3`}
-        />
-        <div className="mb-3 grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-stone-700">Email</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-stone-700">Phone</label>
-            <input
-              value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              className={inputClass}
-            />
-          </div>
-        </div>
-        <label className="mb-1 block text-sm font-medium text-stone-700">Address</label>
-        <input
-          value={form.address}
-          onChange={(e) => setForm({ ...form, address: e.target.value })}
-          className={`${inputClass} mb-3`}
-        />
-        <div className="mb-4 flex gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-stone-700">
-              Preparation time (min)
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={240}
-              value={form.prep_minutes}
-              onChange={(e) => setForm({ ...form, prep_minutes: e.target.value })}
-              className={`${inputClass} w-32`}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-stone-700">Currency</label>
-            <select
-              value={settings.currency}
-              onChange={(e) => void save({ currency: e.target.value })}
-              className={`${inputClass} w-32`}
-            >
-              <option value="VND">₫ VND</option>
-              <option value="SGD">S$ SGD</option>
-            </select>
-            <p className="mt-1 max-w-[220px] text-xs text-stone-500">
-              Existing prices are not converted when you switch.
-            </p>
-          </div>
-        </div>
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-        >
-          Save shop info
-        </button>
-      </form>
-
-      <section className="mb-6 rounded-lg bg-white p-5 shadow-sm">
-        <h2 className="mb-3 font-semibold text-stone-800">Payment methods</h2>
-        <div className="space-y-2">
-          {[
-            { key: "cash", label: "Cash on pickup/delivery" },
-            { key: "bank_transfer", label: "Bank transfer" },
-          ].map((method) => (
-            <label key={method.key} className="flex items-center justify-between text-sm">
-              <span className="text-stone-700">{method.label}</span>
-              <input
-                type="checkbox"
-                checked={settings.payment_methods[method.key] ?? false}
-                onChange={() => togglePayment(method.key)}
-                disabled={busy}
-                className="h-4 w-4 accent-amber-600"
-              />
-            </label>
-          ))}
-          <label
-            className={`flex items-center justify-between text-sm ${
-              settings.currency === "SGD" ? "" : "opacity-50"
+      <div className="mb-4 flex flex-wrap gap-1 border-b border-stone-200">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+              activeTab === tab.id
+                ? "border-amber-600 text-amber-700"
+                : "border-transparent text-stone-500 hover:text-stone-800"
             }`}
           >
-            <span className="text-stone-700">
-              PayNow{" "}
-              <span className="text-xs text-stone-500">
-                (SGD shops with a PayNow proxy configured below)
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={settings.payment_methods.paynow ?? false}
-              onChange={() => togglePayment("paynow")}
-              disabled={
-                busy ||
-                settings.currency !== "SGD" ||
-                !settings.paynow_proxy_value
-              }
-              className="h-4 w-4 accent-amber-600"
-            />
-          </label>
-          <label className="flex items-center justify-between text-sm opacity-50">
-            <span className="text-stone-700">
-              Stripe <span className="text-xs text-stone-500">(coming in Phase 2)</span>
-            </span>
-            <input type="checkbox" checked={false} disabled className="h-4 w-4" />
-          </label>
-        </div>
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-        <div className="mt-4 rounded-md bg-stone-50 p-3">
-          <p className="mb-2 text-sm font-medium text-stone-700">PayNow details (Singapore)</p>
-          <div className="flex flex-wrap items-end gap-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-stone-500">Proxy type</label>
+      {activeTab === "general" && (
+        <div className="space-y-6">
+          <form onSubmit={saveInfo} className="rounded-lg bg-white p-5 shadow-sm">
+            <h2 className="mb-3 font-semibold text-stone-800">Shop info</h2>
+            <label className="mb-1 block text-sm font-medium text-stone-700">Shop name</label>
+            <input
+              required
+              value={form.shop_name}
+              onChange={(e) => setForm({ ...form, shop_name: e.target.value })}
+              className={`${inputClass} mb-3`}
+            />
+            <div className="mb-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-stone-700">Email</label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-stone-700">Phone</label>
+                <input
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            <label className="mb-1 block text-sm font-medium text-stone-700">Address</label>
+            <input
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              className={`${inputClass} mb-3`}
+            />
+            <div className="mb-4 flex gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-stone-700">
+                  Preparation time (min)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={240}
+                  value={form.prep_minutes}
+                  onChange={(e) => setForm({ ...form, prep_minutes: e.target.value })}
+                  className={`${inputClass} w-32`}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-stone-700">Currency</label>
+                <select
+                  value={settings.currency}
+                  onChange={(e) => void save({ currency: e.target.value })}
+                  className={`${inputClass} w-32`}
+                >
+                  <option value="VND">₫ VND</option>
+                  <option value="SGD">S$ SGD</option>
+                </select>
+                <p className="mt-1 max-w-[220px] text-xs text-stone-500">
+                  Existing prices are not converted when you switch.
+                </p>
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              Save shop info
+            </button>
+          </form>
+
+          <section className="rounded-lg bg-white p-5 shadow-sm">
+            <h2 className="mb-3 font-semibold text-stone-800">Payment methods</h2>
+            <div className="space-y-2">
+              {[
+                { key: "cash", label: "Cash on pickup/delivery" },
+                { key: "bank_transfer", label: "Bank transfer" },
+              ].map((method) => (
+                <label key={method.key} className="flex items-center justify-between text-sm">
+                  <span className="text-stone-700">{method.label}</span>
+                  <input
+                    type="checkbox"
+                    checked={settings.payment_methods[method.key] ?? false}
+                    onChange={() => togglePayment(method.key)}
+                    disabled={busy}
+                    className="h-4 w-4 accent-amber-600"
+                  />
+                </label>
+              ))}
+              <label
+                className={`flex items-center justify-between text-sm ${
+                  settings.currency === "SGD" ? "" : "opacity-50"
+                }`}
+              >
+                <span className="text-stone-700">
+                  PayNow{" "}
+                  <span className="text-xs text-stone-500">
+                    (SGD shops with a PayNow proxy configured below)
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={settings.payment_methods.paynow ?? false}
+                  onChange={() => togglePayment("paynow")}
+                  disabled={
+                    busy ||
+                    settings.currency !== "SGD" ||
+                    !settings.paynow_proxy_value
+                  }
+                  className="h-4 w-4 accent-amber-600"
+                />
+              </label>
+              <label className="flex items-center justify-between text-sm opacity-50">
+                <span className="text-stone-700">
+                  Stripe <span className="text-xs text-stone-500">(coming in Phase 2)</span>
+                </span>
+                <input type="checkbox" checked={false} disabled className="h-4 w-4" />
+              </label>
+            </div>
+
+            <div className="mt-4 rounded-md bg-stone-50 p-3">
+              <p className="mb-2 text-sm font-medium text-stone-700">PayNow details (Singapore)</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-stone-500">Proxy type</label>
+                  <select
+                    value={paynow.proxy_type}
+                    onChange={(e) => setPaynow({ ...paynow, proxy_type: e.target.value })}
+                    className={`${inputClass} w-28`}
+                  >
+                    <option value="UEN">UEN</option>
+                    <option value="MOBILE">Mobile</option>
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs font-medium text-stone-500">
+                    {paynow.proxy_type === "UEN" ? "UEN" : "SG mobile number"}
+                  </label>
+                  <input
+                    value={paynow.proxy_value}
+                    onChange={(e) => setPaynow({ ...paynow, proxy_value: e.target.value })}
+                    placeholder={paynow.proxy_type === "UEN" ? "e.g. 201403121W" : "e.g. 91234567"}
+                    className={inputClass}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void save({
+                      paynow_proxy_type: paynow.proxy_type,
+                      paynow_proxy_value: paynow.proxy_value.trim() || null,
+                    })
+                  }
+                  className="cursor-pointer rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                >
+                  Save PayNow
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-stone-500">
+                Customers scan a QR embedding the exact amount + order number; you confirm each
+                payment with &quot;Mark paid&quot; on the Orders page.
+              </p>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {activeTab === "messenger" && (
+        <form onSubmit={saveFacebook} className="rounded-lg bg-white p-5 shadow-sm">
+          <h2 className="mb-1 flex items-center gap-2 font-semibold text-stone-800">
+            Facebook Messenger
+            {settings.facebook_connected && (
+              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+                Connected ✓
+              </span>
+            )}
+          </h2>
+          <p className="mb-3 text-xs text-stone-500">
+            Customers get order updates in Messenger and can check status by sending their
+            order number to your Page.
+          </p>
+          <label className="mb-1 block text-sm font-medium text-stone-700">Facebook Page ID</label>
+          <input
+            value={fb.page_id}
+            onChange={(e) => setFb({ ...fb, page_id: e.target.value })}
+            className={`${inputClass} mb-3`}
+          />
+          <label className="mb-1 block text-sm font-medium text-stone-700">
+            Page access token{" "}
+            <span className="font-normal text-stone-500">
+              (write-only — leave blank to keep the current one)
+            </span>
+          </label>
+          <input
+            type="password"
+            value={fb.token}
+            onChange={(e) => setFb({ ...fb, token: e.target.value })}
+            className={`${inputClass} mb-4`}
+          />
+          <button
+            type="submit"
+            disabled={busy}
+            className="mb-4 rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            Save Facebook settings
+          </button>
+
+          <div className="rounded-md bg-stone-50 p-3 text-xs text-stone-600">
+            <p className="mb-1 font-medium text-stone-700">Webhook setup (in your FB App):</p>
+            <p className="mb-1 flex items-center gap-2">
+              Callback URL: <code className="rounded bg-white px-1">{webhookUrl}</code>
+              <button type="button" onClick={() => copy(webhookUrl, "wh")} className="text-amber-700 hover:underline">
+                {copied === "wh" ? "Copied!" : "Copy"}
+              </button>
+            </p>
+            <p>
+              Verify token: <code className="rounded bg-white px-1">menuhub-verify</code>{" "}
+              <span className="text-stone-500">(or your FACEBOOK_VERIFY_TOKEN)</span>
+            </p>
+          </div>
+        </form>
+      )}
+
+      {activeTab === "appearance" && (
+        <div className="space-y-6">
+          <section className="rounded-lg bg-white p-5 shadow-sm">
+            <h2 className="mb-3 font-semibold text-stone-800">SEO & search visibility</h2>
+            <p className="mb-3 text-xs text-stone-500">
+              Customise how your order page appears in search results and social shares.
+            </p>
+            <div className="mb-3 grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-stone-700">
+                  Page title template{" "}
+                  <span className="font-normal text-stone-500">(use {"{shop_name}"} as placeholder)</span>
+                </label>
+                <input
+                  value={seo.title_template ?? ''}
+                  onChange={(e) => setSeo({ ...seo, title_template: e.target.value })}
+                  placeholder='e.g. {shop_name} — Order Online'
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            <label className="mb-1 block text-sm font-medium text-stone-700">Meta description</label>
+            <textarea
+              value={seo.description ?? ''}
+              onChange={(e) => setSeo({ ...seo, description: e.target.value })}
+              placeholder="A short description for search engine results…"
+              rows={3}
+              className={`${inputClass} mb-3 resize-none`}
+            />
+            <label className="mb-1 block text-sm font-medium text-stone-700">
+              Keywords{" "}
+              <span className="font-normal text-stone-500">(comma-separated)</span>
+            </label>
+            <input
+              value={seo.keywords ?? ''}
+              onChange={(e) => setSeo({ ...seo, keywords: e.target.value })}
+              placeholder="e.g. pho, vietnamese food, order online"
+              className={`${inputClass} mb-3`}
+            />
+            <label className="mb-1 block text-sm font-medium text-stone-700">
+              OG image URL{" "}
+              <span className="font-normal text-stone-500">(shown when shared on social media)</span>
+            </label>
+            <input
+              value={seo.og_image_url ?? ''}
+              onChange={(e) => setSeo({ ...seo, og_image_url: e.target.value })}
+              placeholder="https://…"
+              className={`${inputClass} mb-4`}
+            />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void save({
+                  seo: {
+                    title_template: seo.title_template?.trim() || null,
+                    description: seo.description?.trim() || null,
+                    keywords: seo.keywords?.trim() || null,
+                    og_image_url: seo.og_image_url?.trim() || null,
+                  },
+                })
+              }
+              className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              Save SEO settings
+            </button>
+          </section>
+
+          <section className="rounded-lg bg-white p-5 shadow-sm">
+            <h2 className="mb-3 font-semibold text-stone-800">Order page appearance</h2>
+            <p className="mb-3 text-xs text-stone-500">
+              Customise the top banner shown on your public order page.
+            </p>
+            <div className="mb-3 grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-stone-700">Banner headline</label>
+                <input
+                  value={orderPage.banner_headline ?? ""}
+                  onChange={(e) => setOrderPage({ ...orderPage, banner_headline: e.target.value })}
+                  placeholder="e.g. Grand Opening"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+            <label className="mb-1 block text-sm font-medium text-stone-700">Banner subtitle</label>
+            <input
+              value={orderPage.banner_subtitle ?? ""}
+              onChange={(e) => setOrderPage({ ...orderPage, banner_subtitle: e.target.value })}
+              placeholder="e.g. 20% off your first order"
+              className={`${inputClass} mb-3`}
+            />
+            <label className="mb-1 block text-sm font-medium text-stone-700">
+              Banner image URL{" "}
+              <span className="font-normal text-stone-500">(optional — leave blank for a gradient)</span>
+            </label>
+            <input
+              value={orderPage.banner_image_url ?? ""}
+              onChange={(e) => setOrderPage({ ...orderPage, banner_image_url: e.target.value })}
+              placeholder="https://…"
+              className={`${inputClass} mb-3`}
+            />
+            <label className="mb-1 block text-sm font-medium text-stone-700">
+              Announcement{" "}
+              <span className="font-normal text-stone-500">(shown below the banner)</span>
+            </label>
+            <div className="mb-3 flex gap-2">
+              <input
+                value={orderPage.announcement ?? ""}
+                onChange={(e) => setOrderPage({ ...orderPage, announcement: e.target.value })}
+                placeholder="e.g. New menu items added!"
+                className={`${inputClass} flex-1`}
+              />
               <select
-                value={paynow.proxy_type}
-                onChange={(e) => setPaynow({ ...paynow, proxy_type: e.target.value })}
+                value={orderPage.announcement_style}
+                onChange={(e) =>
+                  setOrderPage({ ...orderPage, announcement_style: e.target.value as "info" | "warning" | "promo" })
+                }
                 className={`${inputClass} w-28`}
               >
-                <option value="UEN">UEN</option>
-                <option value="MOBILE">Mobile</option>
+                <option value="promo">Promo</option>
+                <option value="info">Info</option>
+                <option value="warning">Warning</option>
               </select>
             </div>
-            <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-stone-500">
-                {paynow.proxy_type === "UEN" ? "UEN" : "SG mobile number"}
-              </label>
-              <input
-                value={paynow.proxy_value}
-                onChange={(e) => setPaynow({ ...paynow, proxy_value: e.target.value })}
-                placeholder={paynow.proxy_type === "UEN" ? "e.g. 201403121W" : "e.g. 91234567"}
-                className={inputClass}
-              />
+            <label className="mb-1 block text-sm font-medium text-stone-700">Opening hours</label>
+            <input
+              value={orderPage.opening_hours ?? ""}
+              onChange={(e) => setOrderPage({ ...orderPage, opening_hours: e.target.value })}
+              placeholder="e.g. Mon–Fri 8am–8pm, Sat–Sun 9am–6pm"
+              className={`${inputClass} mb-4`}
+            />
+            <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-stone-700">Instagram</label>
+                <input
+                  value={orderPage.instagram_handle ?? ""}
+                  onChange={(e) => setOrderPage({ ...orderPage, instagram_handle: e.target.value })}
+                  placeholder="username"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-stone-700">TikTok</label>
+                <input
+                  value={orderPage.tiktok_username ?? ""}
+                  onChange={(e) => setOrderPage({ ...orderPage, tiktok_username: e.target.value })}
+                  placeholder="username"
+                  className={inputClass}
+                />
+              </div>
             </div>
             <button
               type="button"
               disabled={busy}
               onClick={() =>
                 void save({
-                  paynow_proxy_type: paynow.proxy_type,
-                  paynow_proxy_value: paynow.proxy_value.trim() || null,
+                  order_page: {
+                    banner_image_url: orderPage.banner_image_url?.trim() || null,
+                    banner_headline: orderPage.banner_headline?.trim() || null,
+                    banner_subtitle: orderPage.banner_subtitle?.trim() || null,
+                    announcement: orderPage.announcement?.trim() || null,
+                    announcement_style: orderPage.announcement_style,
+                    show_address: orderPage.show_address,
+                    show_phone: orderPage.show_phone,
+                    opening_hours: orderPage.opening_hours?.trim() || null,
+                    instagram_handle: orderPage.instagram_handle?.trim() || null,
+                    tiktok_username: orderPage.tiktok_username?.trim() || null,
+                    facebook_page_url: orderPage.facebook_page_url?.trim() || null,
+                    media_gallery: galleryItems,
+                  },
                 })
               }
-              className="cursor-pointer rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+              className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
             >
-              Save PayNow
+              Save order page settings
             </button>
-          </div>
-          <p className="mt-2 text-xs text-stone-500">
-            Customers scan a QR embedding the exact amount + order number; you confirm each
-            payment with &quot;Mark paid&quot; on the Orders page.
-          </p>
-        </div>
-      </section>
+          </section>
 
-      <form onSubmit={saveFacebook} className="mb-6 rounded-lg bg-white p-5 shadow-sm">
-        <h2 className="mb-1 flex items-center gap-2 font-semibold text-stone-800">
-          Facebook Messenger
-          {settings.facebook_connected && (
-            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
-              Connected ✓
-            </span>
-          )}
-        </h2>
-        <p className="mb-3 text-xs text-stone-500">
-          Customers get order updates in Messenger and can check status by sending their
-          order number to your Page.
-        </p>
-        <label className="mb-1 block text-sm font-medium text-stone-700">Facebook Page ID</label>
-        <input
-          value={fb.page_id}
-          onChange={(e) => setFb({ ...fb, page_id: e.target.value })}
-          className={`${inputClass} mb-3`}
-        />
-        <label className="mb-1 block text-sm font-medium text-stone-700">
-          Page access token{" "}
-          <span className="font-normal text-stone-500">
-            (write-only — leave blank to keep the current one)
-          </span>
-        </label>
-        <input
-          type="password"
-          value={fb.token}
-          onChange={(e) => setFb({ ...fb, token: e.target.value })}
-          className={`${inputClass} mb-4`}
-        />
-        <button
-          type="submit"
-          disabled={busy}
-          className="mb-4 rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-        >
-          Save Facebook settings
-        </button>
+          <section className="rounded-lg bg-white p-5 shadow-sm">
+            <h2 className="mb-3 font-semibold text-stone-800">Media gallery</h2>
+            <p className="mb-3 text-xs text-stone-500">
+              Show photos from your Facebook Page and TikTok videos on your order page. Gallery
+              items appear below the promo carousel for customers to browse.
+            </p>
 
-        <div className="rounded-md bg-stone-50 p-3 text-xs text-stone-600">
-          <p className="mb-1 font-medium text-stone-700">Webhook setup (in your FB App):</p>
-          <p className="mb-1 flex items-center gap-2">
-            Callback URL: <code className="rounded bg-white px-1">{webhookUrl}</code>
-            <button type="button" onClick={() => copy(webhookUrl, "wh")} className="text-amber-700 hover:underline">
-              {copied === "wh" ? "Copied!" : "Copy"}
-            </button>
-          </p>
-          <p>
-            Verify token: <code className="rounded bg-white px-1">menuhub-verify</code>{" "}
-            <span className="text-stone-500">(or your FACEBOOK_VERIFY_TOKEN)</span>
-          </p>
-        </div>
-      </form>
+            {galleryMsg && (
+              <p className="mb-3 rounded-md bg-blue-50 p-2 text-xs font-medium text-blue-800">{galleryMsg}</p>
+            )}
 
-      <section className="mb-6 rounded-lg bg-white p-5 shadow-sm">
-        <h2 className="mb-3 font-semibold text-stone-800">SEO & search visibility</h2>
-        <p className="mb-3 text-xs text-stone-500">
-          Customise how your order page appears in search results and social shares.
-        </p>
-        <div className="mb-3 grid gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-stone-700">
-              Page title template{" "}
-              <span className="font-normal text-stone-500">(use {"{shop_name}"} as placeholder)</span>
-            </label>
-            <input
-              value={seo.title_template ?? ''}
-              onChange={(e) => setSeo({ ...seo, title_template: e.target.value })}
-              placeholder='e.g. {shop_name} — Order Online'
-              className={inputClass}
-            />
-          </div>
-        </div>
-        <label className="mb-1 block text-sm font-medium text-stone-700">Meta description</label>
-        <textarea
-          value={seo.description ?? ''}
-          onChange={(e) => setSeo({ ...seo, description: e.target.value })}
-          placeholder="A short description for search engine results…"
-          rows={3}
-          className={`${inputClass} mb-3 resize-none`}
-        />
-        <label className="mb-1 block text-sm font-medium text-stone-700">
-          Keywords{" "}
-          <span className="font-normal text-stone-500">(comma-separated)</span>
-        </label>
-        <input
-          value={seo.keywords ?? ''}
-          onChange={(e) => setSeo({ ...seo, keywords: e.target.value })}
-          placeholder="e.g. pho, vietnamese food, order online"
-          className={`${inputClass} mb-3`}
-        />
-        <label className="mb-1 block text-sm font-medium text-stone-700">
-          OG image URL{" "}
-          <span className="font-normal text-stone-500">(shown when shared on social media)</span>
-        </label>
-        <input
-          value={seo.og_image_url ?? ''}
-          onChange={(e) => setSeo({ ...seo, og_image_url: e.target.value })}
-          placeholder="https://…"
-          className={`${inputClass} mb-4`}
-        />
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() =>
-            void save({
-              seo: {
-                title_template: seo.title_template?.trim() || null,
-                description: seo.description?.trim() || null,
-                keywords: seo.keywords?.trim() || null,
-                og_image_url: seo.og_image_url?.trim() || null,
-              },
-            })
-          }
-          className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-        >
-          Save SEO settings
-        </button>
-      </section>
+            <div className="mb-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={syncing}
+                onClick={syncFacebook}
+                className="cursor-pointer rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {syncing ? "Syncing…" : "Sync Facebook photos"}
+              </button>
+            </div>
 
-      <section className="mb-6 rounded-lg bg-white p-5 shadow-sm">
-        <h2 className="mb-3 font-semibold text-stone-800">Order page appearance</h2>
-        <p className="mb-3 text-xs text-stone-500">
-          Customise the top banner shown on your public order page.
-        </p>
-        <div className="mb-3 grid gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-stone-700">Banner headline</label>
-            <input
-              value={orderPage.banner_headline ?? ""}
-              onChange={(e) => setOrderPage({ ...orderPage, banner_headline: e.target.value })}
-              placeholder="e.g. Grand Opening"
-              className={inputClass}
-            />
-          </div>
-        </div>
-        <label className="mb-1 block text-sm font-medium text-stone-700">Banner subtitle</label>
-        <input
-          value={orderPage.banner_subtitle ?? ""}
-          onChange={(e) => setOrderPage({ ...orderPage, banner_subtitle: e.target.value })}
-          placeholder="e.g. 20% off your first order"
-          className={`${inputClass} mb-3`}
-        />
-        <label className="mb-1 block text-sm font-medium text-stone-700">
-          Banner image URL{" "}
-          <span className="font-normal text-stone-500">(optional — leave blank for a gradient)</span>
-        </label>
-        <input
-          value={orderPage.banner_image_url ?? ""}
-          onChange={(e) => setOrderPage({ ...orderPage, banner_image_url: e.target.value })}
-          placeholder="https://…"
-          className={`${inputClass} mb-3`}
-        />
-        <label className="mb-1 block text-sm font-medium text-stone-700">
-          Announcement{" "}
-          <span className="font-normal text-stone-500">(shown below the banner)</span>
-        </label>
-        <div className="mb-3 flex gap-2">
-          <input
-            value={orderPage.announcement ?? ""}
-            onChange={(e) => setOrderPage({ ...orderPage, announcement: e.target.value })}
-            placeholder="e.g. New menu items added!"
-            className={`${inputClass} flex-1`}
-          />
-          <select
-            value={orderPage.announcement_style}
-            onChange={(e) =>
-              setOrderPage({ ...orderPage, announcement_style: e.target.value as "info" | "warning" | "promo" })
-            }
-            className={`${inputClass} w-28`}
-          >
-            <option value="promo">Promo</option>
-            <option value="info">Info</option>
-            <option value="warning">Warning</option>
-          </select>
-        </div>
-        <label className="mb-1 block text-sm font-medium text-stone-700">Opening hours</label>
-        <input
-          value={orderPage.opening_hours ?? ""}
-          onChange={(e) => setOrderPage({ ...orderPage, opening_hours: e.target.value })}
-          placeholder="e.g. Mon–Fri 8am–8pm, Sat–Sun 9am–6pm"
-          className={`${inputClass} mb-4`}
-        />
-        <div className="mb-4 grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-stone-700">Instagram</label>
-            <input
-              value={orderPage.instagram_handle ?? ""}
-              onChange={(e) => setOrderPage({ ...orderPage, instagram_handle: e.target.value })}
-              placeholder="username"
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-stone-700">TikTok</label>
-            <input
-              value={orderPage.tiktok_username ?? ""}
-              onChange={(e) => setOrderPage({ ...orderPage, tiktok_username: e.target.value })}
-              placeholder="username"
-              className={inputClass}
-            />
-          </div>
-        </div>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() =>
-            void save({
-              order_page: {
-                banner_image_url: orderPage.banner_image_url?.trim() || null,
-                banner_headline: orderPage.banner_headline?.trim() || null,
-                banner_subtitle: orderPage.banner_subtitle?.trim() || null,
-                announcement: orderPage.announcement?.trim() || null,
-                announcement_style: orderPage.announcement_style,
-                show_address: orderPage.show_address,
-                show_phone: orderPage.show_phone,
-                opening_hours: orderPage.opening_hours?.trim() || null,
-                instagram_handle: orderPage.instagram_handle?.trim() || null,
-                tiktok_username: orderPage.tiktok_username?.trim() || null,
-                facebook_page_url: orderPage.facebook_page_url?.trim() || null,
-                media_gallery: galleryItems,
-              },
-            })
-          }
-          className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-        >
-          Save order page settings
-        </button>
-      </section>
+            <div className="mb-4 flex items-end gap-2">
+              <div className="flex-1">
+                <label className="mb-1 block text-xs font-medium text-stone-500">TikTok video URL</label>
+                <input
+                  value={tiktokUrl}
+                  onChange={(e) => setTiktokUrl(e.target.value)}
+                  placeholder="https://www.tiktok.com/@shop/video/123…"
+                  className={inputClass}
+                />
+              </div>
+              <button
+                type="button"
+                disabled={!tiktokUrl.trim()}
+                onClick={addTikTok}
+                className="cursor-pointer rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
 
-      <section className="mb-6 rounded-lg bg-white p-5 shadow-sm">
-        <h2 className="mb-3 font-semibold text-stone-800">Media gallery</h2>
-        <p className="mb-3 text-xs text-stone-500">
-          Show photos from your Facebook Page and TikTok videos on your order page. Gallery
-          items appear below the promo carousel for customers to browse.
-        </p>
-
-        {galleryMsg && (
-          <p className="mb-3 rounded-md bg-blue-50 p-2 text-xs font-medium text-blue-800">{galleryMsg}</p>
-        )}
-
-        <div className="mb-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={syncing}
-            onClick={syncFacebook}
-            className="cursor-pointer rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {syncing ? "Syncing…" : "Sync Facebook photos"}
-          </button>
-        </div>
-
-        <div className="mb-4 flex items-end gap-2">
-          <div className="flex-1">
-            <label className="mb-1 block text-xs font-medium text-stone-500">TikTok video URL</label>
-            <input
-              value={tiktokUrl}
-              onChange={(e) => setTiktokUrl(e.target.value)}
-              placeholder="https://www.tiktok.com/@shop/video/123…"
-              className={inputClass}
-            />
-          </div>
-          <button
-            type="button"
-            disabled={!tiktokUrl.trim()}
-            onClick={addTikTok}
-            className="cursor-pointer rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-          >
-            Add
-          </button>
-        </div>
-
-        {galleryItems.length > 0 ? (
-          <div className="space-y-2">
-            {[...galleryItems]
-              .sort((a, b) => a.sort_order - b.sort_order)
-              .map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-3 rounded-md bg-stone-50 p-2"
-                >
-                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-stone-200">
-                    {item.thumbnail_url ? (
-                      <img src={item.thumbnail_url} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs text-stone-400">
-                        {item.source === "tiktok" ? "🎵" : "📷"}
+            {galleryItems.length > 0 ? (
+              <div className="space-y-2">
+                {[...galleryItems]
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                  .map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-3 rounded-md bg-stone-50 p-2"
+                    >
+                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-stone-200">
+                        {item.thumbnail_url ? (
+                          <img src={item.thumbnail_url} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-xs text-stone-400">
+                            {item.source === "tiktok" ? "🎵" : "📷"}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-stone-800">
-                      {item.source === "tiktok" ? "TikTok video" : "Facebook photo"}
-                    </p>
-                    {item.source_url && (
-                      <p className="truncate text-xs text-stone-500">{item.source_url}</p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => deleteGalleryItem(item.id)}
-                    className="cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
-          </div>
-        ) : (
-          <p className="text-sm text-stone-400">No media items yet. Sync from Facebook or add a TikTok URL.</p>
-        )}
-      </section>
-
-      <section className="rounded-lg bg-white p-5 shadow-sm">
-        <h2 className="mb-1 font-semibold text-stone-800">Order page & embed</h2>
-        <p className="mb-3 text-xs text-stone-500">
-          Share your order link anywhere, or embed the form on your website / Facebook Page tab.
-        </p>
-        <p className="mb-2 flex items-center gap-2 text-sm">
-          <a href={orderUrl} target="_blank" className="font-medium text-amber-700 hover:underline">
-            {orderUrl}
-          </a>
-          <button type="button" onClick={() => copy(orderUrl, "url")} className="text-xs text-amber-700 hover:underline">
-            {copied === "url" ? "Copied!" : "Copy"}
-          </button>
-        </p>
-        <div className="flex items-start gap-2">
-          <code className="block flex-1 overflow-x-auto rounded-md bg-stone-50 p-3 text-xs text-stone-600">
-            {embedSnippet}
-          </code>
-          <button
-            type="button"
-            onClick={() => copy(embedSnippet, "embed")}
-            className="shrink-0 text-xs font-medium text-amber-700 hover:underline"
-          >
-            {copied === "embed" ? "Copied!" : "Copy"}
-          </button>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-stone-800">
+                          {item.source === "tiktok" ? "TikTok video" : "Facebook photo"}
+                        </p>
+                        {item.source_url && (
+                          <p className="truncate text-xs text-stone-500">{item.source_url}</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => deleteGalleryItem(item.id)}
+                        className="cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <p className="text-sm text-stone-400">No media items yet. Sync from Facebook or add a TikTok URL.</p>
+            )}
+          </section>
         </div>
-      </section>
+      )}
+
+      {activeTab === "share" && (
+        <section className="rounded-lg bg-white p-5 shadow-sm">
+          <h2 className="mb-1 font-semibold text-stone-800">Order page & embed</h2>
+          <p className="mb-3 text-xs text-stone-500">
+            Share your order link anywhere, or embed the form on your website / Facebook Page tab.
+          </p>
+          <p className="mb-2 flex items-center gap-2 text-sm">
+            <a href={orderUrl} target="_blank" className="font-medium text-amber-700 hover:underline">
+              {orderUrl}
+            </a>
+            <button type="button" onClick={() => copy(orderUrl, "url")} className="text-xs text-amber-700 hover:underline">
+              {copied === "url" ? "Copied!" : "Copy"}
+            </button>
+          </p>
+          <div className="flex items-start gap-2">
+            <code className="block flex-1 overflow-x-auto rounded-md bg-stone-50 p-3 text-xs text-stone-600">
+              {embedSnippet}
+            </code>
+            <button
+              type="button"
+              onClick={() => copy(embedSnippet, "embed")}
+              className="shrink-0 text-xs font-medium text-amber-700 hover:underline"
+            >
+              {copied === "embed" ? "Copied!" : "Copy"}
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
